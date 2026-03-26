@@ -1,9 +1,6 @@
 import logging
 
-from ..state import AgentState
-
 logger = logging.getLogger(__name__)
-
 
 async def technical_analyst_agent(state: AgentState) -> dict:
     """

@@ -15,6 +15,17 @@ def get_fin_val(df: pd.DataFrame, keys: list, default=0.0):
             return float(val) if pd.notnull(val) else default
     return default
 
+def safe_scalar(val, default=np.nan):
+    """Safely extract a scalar from Series/float/None."""
+    if val is None:
+        return default
+    if isinstance(val, pd.Series):
+        return float(val.iloc[-1]) if not val.empty else default
+    try:
+        return float(val)
+    except Exception:
+        return default
+
 # =======================================
 # Financial Metrics
 # =======================================

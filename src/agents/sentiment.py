@@ -1,3 +1,5 @@
+# Parsing text from X application / GROG AI
+
 from app.engine.state import AgentState
 
 

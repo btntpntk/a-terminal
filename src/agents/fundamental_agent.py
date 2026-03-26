@@ -1,3 +1,6 @@
+# 1. Gemini API
+# 2. Set up Input and Prompts for Investors
+
 def fundamental_agent(state):
     metrics = state["data"]["metrics"]
     pe = metrics.get("fwd_pe", 0)

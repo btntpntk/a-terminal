@@ -1,3 +1,5 @@
+# Risk Management after having Technical Signal to entry
+
 def risk_manager_agent(state):
     # Edge Logic: The "Kill Switch." Overrides signals if debt is too high.
     debt = state["data"]["metrics"].get("debt_to_equity", 0)
