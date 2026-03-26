@@ -48,7 +48,7 @@ from src.agents.market_risk import (
 from src.agents.global_macro import run_global_macro_analysis
 
 # ── Stage 2: Sector Screener ──────────────────────────────────
-from src.agents.sector_screener import run_sector_screener, get_sector_for_ticker
+from src.agents.sector_screener import run_sector_screener, get_sector_for_ticker, UNIVERSE_REGISTRY
 
 # ── Stage 3: Calculator ───────────────────────────────────────
 from src.agents.calculator import (
@@ -351,12 +351,16 @@ async def run_stage1_macro() -> dict:
 # STAGE 2 — SECTOR SCREENER
 # ══════════════════════════════════════════════════════════════
 
-async def run_stage2_sector(macro_results: dict) -> dict:
-    _stage_rule(2, "SECTOR OVERALL")
+async def run_stage2_sector(macro_results: dict, universe_cfg: dict) -> dict:
+    _stage_rule(2, f"SECTOR OVERALL  ·  {universe_cfg['display_name']}")
     console.print(f"  [{DIM}]Momentum  ·  Relative Strength  ·  Breadth  ·  Volume Flow  ·  Macro Alignment[/{DIM}]\n")
 
-    with console.status(f"[{DIM}]Scanning SET50 sector universe...[/{DIM}]", spinner="dots"):
-        sector = run_sector_screener(macro_results=macro_results)
+    with console.status(f"[{DIM}]Scanning {universe_cfg['display_name']} sector universe...[/{DIM}]", spinner="dots"):
+        sector = run_sector_screener(
+            macro_results=macro_results,
+            custom_universe=universe_cfg["universe"],
+            benchmark_ticker=universe_cfg["benchmark"],
+        )
 
     ranked = sector["ranked_sectors"]
 
@@ -425,7 +429,8 @@ async def run_stage2_sector(macro_results: dict) -> dict:
 
 async def run_stage3_stock(ticker: str, market_data: dict,
                             composite_risk: float,
-                            macro_results: dict) -> dict:
+                            macro_results: dict,
+                            universe: dict = None) -> dict:
     _stage_rule(3, f"STOCK FILTERING  ·  {ticker.upper()}")
     console.print(f"  [{DIM}]ROIC/WACC  ·  Altman Z  ·  Sloan  ·  FCF Quality  ·  CVaR  ·  Sortino  ·  Alpha Score[/{DIM}]\n")
 
@@ -433,7 +438,7 @@ async def run_stage3_stock(ticker: str, market_data: dict,
     returns = market_data["returns"]
 
     # ── Sector lookup ─────────────────────────────────────────
-    sector_name = get_sector_for_ticker(ticker)
+    sector_name = get_sector_for_ticker(ticker, universe=universe)
     sector_adj  = macro_results.get("sector_adjustments", {}).get(sector_name, 0)
 
     # ── All calculations ──────────────────────────────────────
@@ -871,6 +876,18 @@ async def run_analysis_cli():
     )))
     console.print()
 
+    # ── Universe selection ────────────────────────────────────
+    universe_key = await questionary.select(
+        "Select universe:",
+        choices=[
+            questionary.Choice("SET100 Thailand",    value="SET100"),
+            questionary.Choice("Personal Watchlist", value="WATCHLIST"),
+        ],
+    ).ask_async()
+    if not universe_key:
+        return
+    universe_cfg = UNIVERSE_REGISTRY[universe_key]
+
     # ── User input ────────────────────────────────────────────
     ticker = await questionary.text(
         "Ticker symbol:",
@@ -914,7 +931,7 @@ async def run_analysis_cli():
     macro = await run_stage1_macro()
 
     # Stage 2: Sector Screener
-    sector = await run_stage2_sector(macro)
+    sector = await run_stage2_sector(macro, universe_cfg)
 
     # Gate: warn if sector gate closed but let user continue
     if not sector["sector_gate"]:
@@ -924,7 +941,8 @@ async def run_analysis_cli():
     with console.status(f"[{DIM}]Fetching {ticker} fundamentals...[/{DIM}]", spinner="dots"):
         market_data = await fetch_all_data(ticker)
 
-    stock_data = await run_stage3_stock(ticker, market_data, composite_risk, macro)
+    stock_data = await run_stage3_stock(ticker, market_data, composite_risk, macro,
+                                        universe=universe_cfg["universe"])
 
     if not stock_data["gate_pass"]:
         console.print(f"  [yellow3]⚠  Stock did not pass quality filters. Continuing with reduced confidence.[/yellow3]\n")

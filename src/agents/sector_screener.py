@@ -24,7 +24,7 @@ from src.agents.global_macro import run_global_macro_analysis
 SET_SECTOR_UNIVERSE = {
     "ENERGY":        {"etf": "PTT.BK",     "members": ["PTT.BK", "PTTEP.BK", "TOP.BK", "EGCO.BK", "RATCH.BK"]},
     "FINANCIALS":    {"etf": "KBANK.BK",   "members": ["KBANK.BK", "SCB.BK", "BBL.BK", "KTB.BK", "TISCO.BK", "KKP.BK", "KTC.BK", "MTC.BK", "TIDLOR.BK"]},
-    "TECH":          {"etf": "DELTA.BK",   "members": ["DELTA.BK", "ADVANC.BK", "INTUCH.BK", "TRUE.BK", "COM7.BK"]},
+    "TECH":          {"etf": "DELTA.BK",   "members": ["DELTA.BK", "ADVANC.BK", "TRUE.BK", "COM7.BK"]},
     "CONSUMER_DISC": {"etf": "CPALL.BK",   "members": ["CPALL.BK", "BJC.BK", "HMPRO.BK", "CENTEL.BK", "MINT.BK", "CRC.BK", "GLOBAL.BK", "OSP.BK", "CBG.BK"]},
     "CONSUMER_STAP": {"etf": "CPF.BK",     "members": ["CPF.BK", "TU.BK"]},
     "HEALTH":        {"etf": "BDMS.BK",    "members": ["BDMS.BK", "BH.BK"]},
@@ -39,6 +39,62 @@ SET_SECTOR_UNIVERSE = {
 SET_BENCHMARK = "^SET.BK"
 # Fallback benchmark if SET is unavailable
 FALLBACK_BENCHMARK = "EWY"   # iShares MSCI South Korea ETF — closest EM proxy
+
+
+# ─────────────────────────────────────────────────────────────
+# SET100 UNIVERSE  (expanded from SET50 + ~30 additional stocks)
+# ─────────────────────────────────────────────────────────────
+
+SET100_SECTOR_UNIVERSE = {
+    "ENERGY":        {"etf": "PTT.BK",   "members": ["PTT.BK", "PTTEP.BK", "TOP.BK", "EGCO.BK", "RATCH.BK", "OR.BK", "IRPC.BK"]},
+    "FINANCIALS":    {"etf": "KBANK.BK", "members": ["KBANK.BK", "SCB.BK", "BBL.BK", "KTB.BK", "TISCO.BK", "KKP.BK", "KTC.BK", "MTC.BK", "TIDLOR.BK", "BAY.BK", "TCAP.BK"]},
+    "TECH":          {"etf": "DELTA.BK", "members": ["DELTA.BK", "ADVANC.BK", "TRUE.BK", "COM7.BK", "HANA.BK", "INSET.BK"]},
+    "CONSUMER_DISC": {"etf": "CPALL.BK", "members": ["CPALL.BK", "BJC.BK", "HMPRO.BK", "CENTEL.BK", "MINT.BK", "CRC.BK", "GLOBAL.BK", "OSP.BK", "CBG.BK", "BEAUTY.BK"]},
+    "CONSUMER_STAP": {"etf": "CPF.BK",   "members": ["CPF.BK", "TU.BK", "GFPT.BK", "TFG.BK"]},
+    "HEALTH":        {"etf": "BDMS.BK",  "members": ["BDMS.BK", "BH.BK", "BCH.BK", "CHG.BK", "PRINC.BK"]},
+    "MATERIALS":     {"etf": "SCC.BK",   "members": ["SCC.BK", "IVL.BK", "PTTGC.BK", "SCGP.BK", "SCCC.BK"]},
+    "INDUSTRIALS":   {"etf": "BEM.BK",   "members": ["BEM.BK", "BTS.BK", "AOT.BK", "AMATA.BK", "CK.BK"]},
+    "UTILITIES":     {"etf": "BGRIM.BK", "members": ["BGRIM.BK", "GPSC.BK", "GULF.BK", "EA.BK", "GUNKUL.BK", "BCPG.BK", "DEMCO.BK"]},
+    "REIT":          {"etf": "WHA.BK",   "members": ["WHA.BK", "CPN.BK", "AWC.BK", "LH.BK", "SPALI.BK", "AP.BK", "SC.BK", "LPN.BK"]},
+    "TRANSPORT":     {"etf": "BANPU.BK", "members": ["BANPU.BK", "AAV.BK"]},
+}
+
+
+# ─────────────────────────────────────────────────────────────
+# PERSONAL WATCHLIST UNIVERSE
+# ─────────────────────────────────────────────────────────────
+
+WATCHLIST_SECTOR_UNIVERSE = {
+    "ENERGY":          {"etf": "PTT.BK",   "members": ["PTT.BK", "PTTEP.BK", "EGCO.BK", "RATCH.BK", "OR.BK", "BANPU.BK", "GULF.BK", "BKV"]},
+    "FINANCIALS":      {"etf": "KBANK.BK", "members": ["BBL.BK", "KBANK.BK", "KTB.BK", "SCB.BK", "TIDLOR.BK", "TTB.BK", "NEO.BK"]},
+    "TECH":            {"etf": "DELTA.BK", "members": ["DELTA.BK", "ADVANC.BK", "KCE.BK", "SIS.BK", "SFLEX.BK"]},
+    "CONSUMER_DISC":   {"etf": "CPALL.BK", "members": ["CPALL.BK", "CPAXT.BK", "CRC.BK", "HMPRO.BK", "GLOBAL.BK", "OSP.BK", "ERW.BK", "MINT.BK", "SABINA.BK"]},
+    "HEALTH":          {"etf": "BDMS.BK",  "members": ["BDMS.BK", "BH.BK", "BCH.BK", "MEGA.BK"]},
+    "MATERIALS":       {"etf": "SCC.BK",   "members": ["SCC.BK"]},
+    "REIT_PROPERTY":   {"etf": "CPN.BK",   "members": ["CPN.BK", "LH.BK", "WHA.BK", "SPALI.BK", "PF.BK"]},
+    "INDUSTRIALS":     {"etf": "AOT.BK",   "members": ["AOT.BK"]},
+    "WATCHLIST_OTHER": {"etf": "HL.BK",    "members": ["HL.BK", "NKT.BK", "PR9.BK", "RBF.BK", "SISB.BK"]},
+}
+
+
+# ─────────────────────────────────────────────────────────────
+# UNIVERSE REGISTRY  (used by cli4.py for runtime selection)
+# ─────────────────────────────────────────────────────────────
+
+UNIVERSE_REGISTRY = {
+    "SET100": {
+        "display_name":       "SET100 Thailand",
+        "universe":           SET100_SECTOR_UNIVERSE,
+        "benchmark":          "^SET.BK",
+        "fallback_benchmark": "EWY",
+    },
+    "WATCHLIST": {
+        "display_name":       "Personal Watchlist",
+        "universe":           WATCHLIST_SECTOR_UNIVERSE,
+        "benchmark":          "^SET.BK",
+        "fallback_benchmark": "EWY",
+    },
+}
 
 
 # ─────────────────────────────────────────────────────────────
@@ -186,7 +242,8 @@ def analyse_sector(sector_name: str, config: dict, benchmark: pd.Series,
 # ─────────────────────────────────────────────────────────────
 
 def run_sector_screener(macro_results: dict = None,
-                        custom_universe: dict = None) -> dict:
+                        custom_universe: dict = None,
+                        benchmark_ticker: str = None) -> dict:
     """
     Run the full sector screen.
 
@@ -215,7 +272,8 @@ def run_sector_screener(macro_results: dict = None,
     sector_adjustments = macro_results.get("sector_adjustments", {})
 
     # ── 2. Fetch benchmark ───────────────────────────────────
-    benchmark = _fetch(SET_BENCHMARK, "6mo")
+    primary   = benchmark_ticker or SET_BENCHMARK
+    benchmark = _fetch(primary, "6mo")
     if benchmark.empty:
         benchmark = _fetch(FALLBACK_BENCHMARK, "6mo")
 
