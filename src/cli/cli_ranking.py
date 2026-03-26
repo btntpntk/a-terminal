@@ -693,26 +693,171 @@ async def run_ranking_cli() -> None:
     # STAGE 1  —  Global Macro
     # ══════════════════════════════════════════════════════════
 
-    _section(1, "GLOBAL MACRO  ·  CROSS-ASSET REGIME")
-    with console.status(f"[{DIM}]Running cross-asset macro analysis...[/{DIM}]", spinner="dots"):
+    _section(1, "GLOBAL MACRO  ·  EIGHT-SIGNAL CROSS-ASSET DASHBOARD")
+    with console.status(f"[{DIM}]Running cross-asset macro analysis (8 signals)...[/{DIM}]", spinner="dots"):
         macro = await asyncio.to_thread(run_global_macro_analysis)
 
     macro_risk = macro["composite_macro_risk"]
-    adj = macro.get("sector_adjustments", {})
+    adj        = macro.get("sector_adjustments", {})
+    quadrant   = macro.get("cycle_quadrant", "NEUTRAL")
+    q_advice   = macro.get("quadrant_advice", "")
+
+    # ── Quadrant colours ──────────────────────────────────────
+    _QUADRANT_COLOR = {
+        "GOLDILOCKS":    "bright_green",
+        "OVERHEAT":      "orange1",
+        "STAGFLATION":   "red1",
+        "RECESSION_RISK":"yellow3",
+    }
+    q_col = _QUADRANT_COLOR.get(quadrant, "white")
+
+    # ── Row 1: Headline KPIs ──────────────────────────────────
+    thb_rate   = macro["thb"].get("usdthb_rate", "N/A")
+    em_alpha   = macro["em_flows"].get("em_alpha_20d", 0.0)
+    ry_level   = macro["real_yield"].get("yield_level", 0.0)
+    cg_ratio   = macro.get("copper_gold_ratio", 0.0)
 
     console.print(Columns([
-        _kpi("MACRO RISK",  f"{macro_risk:.0f}/100",        _risk_color(macro_risk)),
-        _kpi("REGIME",      macro["macro_regime"],           _risk_color(macro_risk)),
-        _kpi("MACRO BIAS",  macro["macro_bias_summary"][:30], _risk_color(macro_risk)),
+        _kpi("MACRO RISK",    f"{macro_risk:.0f}/100",            _risk_color(macro_risk)),
+        _kpi("REGIME",        macro["macro_regime"],               _risk_color(macro_risk)),
+        _kpi("CYCLE QUADRANT",quadrant,                            q_col),
+        _kpi("10Y YIELD",     f"{ry_level:.2f}%",
+             "red1" if ry_level > 4.5 else "yellow3" if ry_level > 4.0 else "bright_green"),
+        _kpi("USD/THB",       f"{thb_rate}" if thb_rate != "N/A" else "N/A",
+             "red1" if macro["thb"].get("mom_20d_pct", 0) > 0.5 else "bright_green"),
+        _kpi("EM ALPHA 20d",  f"{em_alpha:+.2f}%",
+             "bright_green" if em_alpha > 0 else "red1"),
+        _kpi("Cu/Au RATIO",   f"{cg_ratio:.3f}",
+             "bright_green" if macro["copper"].get("mom_20d_pct", 0) > 0 else "red1"),
     ], equal=False, expand=False))
     console.print()
 
+    # ── Quadrant advice panel ─────────────────────────────────
+    console.print(
+        f"  [{q_col} bold]▶  {quadrant}[/{q_col} bold]  "
+        f"[{DIM}]{q_advice}[/{DIM}]"
+    )
+    console.print()
+
+    # ── Eight-signal cross-asset table ────────────────────────
+    SIGNAL_ROWS = [
+        ("RATES",    "10Y Real Yield",  macro["real_yield"],
+         lambda d: f"{d.get('yield_level', 0):.2f}%"),
+        ("DOLLAR",   "DXY Index",       macro["dxy"],
+         lambda d: f"{d.get('current_price', 0):.2f}"),
+        ("DOLLAR",   "USD / THB",       macro["thb"],
+         lambda d: f"{d.get('usdthb_rate', 'N/A')}"),
+        ("COMMOD.",  "Crude Oil WTI",   macro["crude_oil"],
+         lambda d: f"${d.get('current_price', 0):.2f}"),
+        ("COMMOD.",  "Copper",          macro["copper"],
+         lambda d: f"${d.get('current_price', 0):.4f}"),
+        ("COMMOD.",  "Gold",            macro["gold"],
+         lambda d: f"${d.get('current_price', 0):,.0f}"),
+        ("EM/REG.",  "EM Flows",        macro["em_flows"],
+         lambda d: f"EEM α {d.get('em_alpha_20d', 0):+.1f}%"),
+        ("EM/REG.",  "China Pulse",     macro["china"],
+         lambda d: f"MCHI {d.get('mom_20d_pct', 0):+.1f}%"),
+    ]
+
+    mt = Table(
+        box=None, show_header=True,
+        header_style=f"bold {DIM}", padding=(0, 1), show_edge=False,
+    )
+    mt.add_column("Cat.",     style=DIM,      width=8)
+    mt.add_column("Signal",                   width=16)
+    mt.add_column("Value",                    width=14, justify="right")
+    mt.add_column("20d Mom",                  width=10, justify="right")
+    mt.add_column("Z-Score",                  width=8,  justify="right")
+    mt.add_column("Signal",                   width=26)
+    mt.add_column("Bias",                     width=20)
+    mt.add_column("Wt.",      style=DIM,      width=6,  justify="right")
+    mt.add_column("Score",                    width=6,  justify="right")
+
+    _WEIGHTS_DISPLAY = {
+        "10Y Real Yield": "20%", "DXY Index":    "20%",
+        "EM Flows":       "15%", "Copper":       "15%",
+        "Crude Oil WTI":  "12%", "China Pulse":  "10%",
+        "USD / THB":       "5%", "Gold":          "3%",
+    }
+    prev_cat = None
+    for cat, name, data, val_fn in SIGNAL_ROWS:
+        score  = data.get("risk_score", 50)
+        mom    = data.get("mom_20d_pct", 0.0)
+        z      = data.get("z_score_60d", 0.0)
+        sig    = data.get("signal", "N/A")
+        bias   = data.get("macro_bias", "N/A")
+        wt_str = _WEIGHTS_DISPLAY.get(name, "—")
+
+        try:
+            val_str = val_fn(data)
+        except Exception:
+            val_str = "N/A"
+
+        sc_c  = _risk_color(score)
+        mom_c = "bright_green" if mom > 0 else "red1"
+        z_c   = "bright_green" if z < -0.5 else "red1" if z > 1.0 else "yellow3"
+
+        # Blank category cell on repeated rows to reduce visual noise
+        cat_str = f"[{DIM}]{cat}[/{DIM}]" if cat != prev_cat else ""
+        prev_cat = cat
+
+        mt.add_row(
+            cat_str,
+            f"[bold white]{name}[/bold white]",
+            f"[white]{val_str}[/white]",
+            f"[{mom_c}]{mom:+.2f}%[/{mom_c}]",
+            f"[{z_c}]{z:+.2f}σ[/{z_c}]",
+            f"[{_signal_color(sig)}]{sig[:25]}[/{_signal_color(sig)}]",
+            f"[{DIM}]{bias[:18]}[/{DIM}]",
+            f"[{DIM}]{wt_str}[/{DIM}]",
+            f"[{sc_c} bold]{score}[/{sc_c} bold]",
+        )
+    console.print(mt)
+    console.print()
+
+    # ── Macro bias summary ────────────────────────────────────
+    bias_col = ("bright_green" if "RISK_ON" in macro["macro_bias_summary"]
+                else "red1"    if "DEFENSIVE" in macro["macro_bias_summary"]
+                else "yellow3")
+    console.print(f"  [{DIM}]Overall bias:[/{DIM}]  [{bias_col} bold]{macro['macro_bias_summary']}[/{bias_col} bold]")
+    console.print()
+
+    # ── Sector adjustments (all signals combined) ─────────────
     if adj:
-        parts = []
-        for sector, pts in sorted(adj.items(), key=lambda x: -abs(x[1])):
-            col = "bright_green" if pts > 0 else "red1" if pts < 0 else DIM
-            parts.append(f"[{col}]{sector} {pts:+d}[/{col}]")
-        console.print(f"  [{DIM}]Sector adjustments:[/{DIM}]  " + "   ".join(parts[:7]))
+        at = Table(
+            box=None, show_header=False, padding=(0, 1), show_edge=False,
+        )
+        at.add_column("", width=18)
+        at.add_column("", width=6, justify="right")
+        at.add_column("", width=14, no_wrap=True)
+        at.add_column("", width=18)
+        at.add_column("", width=6, justify="right")
+        at.add_column("", width=14, no_wrap=True)
+
+        sorted_adj = sorted(adj.items(), key=lambda x: -x[1])
+        rows_pairs = list(zip(sorted_adj[::2], sorted_adj[1::2] + [(None, None)]))
+        for (s1, p1), (s2, p2) in rows_pairs:
+            c1 = "bright_green" if p1 > 0 else "red1" if p1 < 0 else DIM
+            bar1 = _mini_bar(50 + p1 * 2.5, 10)
+            if s2 is not None:
+                c2 = "bright_green" if p2 > 0 else "red1" if p2 < 0 else DIM
+                bar2 = _mini_bar(50 + p2 * 2.5, 10)
+                at.add_row(
+                    f"[{DIM}]{s1}[/{DIM}]",
+                    f"[{c1} bold]{p1:+d}[/{c1} bold]",
+                    bar1,
+                    f"[{DIM}]{s2}[/{DIM}]",
+                    f"[{c2} bold]{p2:+d}[/{c2} bold]",
+                    bar2,
+                )
+            else:
+                at.add_row(
+                    f"[{DIM}]{s1}[/{DIM}]",
+                    f"[{c1} bold]{p1:+d}[/{c1} bold]",
+                    bar1, "", "", "",
+                )
+        console.print(f"  [{DIM}]Sector macro adjustments (all 9 signals combined):[/{DIM}]")
+        console.print(at)
         console.print()
 
     # ══════════════════════════════════════════════════════════
