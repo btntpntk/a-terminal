@@ -465,9 +465,9 @@ async def run_stage3_stock(ticker: str, market_data: dict,
     # ── Row 1: Moat ───────────────────────────────────────────
     console.print(f"  [{DIM}]Moat & Alpha[/{DIM}]")
     console.print(Columns([
-        _kpi("ROIC",        roic,       "steel_blue1"),
-        _kpi("WACC",        wacc,       "yellow3"),
-        _kpi("MOAT SPREAD", moat_spread, spread_color),
+        _kpi("ROIC",        f"{roic*100:.2f}%",            "steel_blue1"),
+        _kpi("WACC",        f"{wacc*100:.2f}%",            "yellow3"),
+        _kpi("MOAT SPREAD", f"{moat_spread*100:+.2f}%",    spread_color),
         _kpi("ALPHA SCORE", f"{alpha:.0f}/100",
              "bright_green" if alpha >= 60 else "yellow3" if alpha >= 40 else "red1"),
         _kpi("SECTOR",      sector_name, "medium_purple1"),
@@ -479,11 +479,11 @@ async def run_stage3_stock(ticker: str, market_data: dict,
     # ── Row 2: Quality ────────────────────────────────────────
     console.print(f"  [{DIM}]Earnings Quality & Survival[/{DIM}]")
     console.print(Columns([
-        _kpi("SLOAN RATIO",  s_ratio,
+        _kpi("SLOAN RATIO",  f"{s_ratio:+.3f}",
              "bright_green" if abs(s_ratio) < 0.05 else "yellow3" if abs(s_ratio) < 0.10 else "red1"),
-        _kpi("FCF QUALITY",  fcf_q,
+        _kpi("FCF QUALITY",  f"{fcf_q:.2f}×",
              "bright_green" if fcf_q > 0.6 else "yellow3" if fcf_q > 0.3 else "red1"),
-        _kpi("ALTMAN Z",     z_score,
+        _kpi("ALTMAN Z",     f"{z_score:.2f}",
              "bright_green" if z_score > 2.99 else "yellow3" if z_score > 1.81 else "red1"),
         _kpi("BETA",         f"{beta:.2f}",
              "bright_green" if beta < 1.0 else "yellow3" if beta < 1.5 else "red1"),
@@ -493,11 +493,11 @@ async def run_stage3_stock(ticker: str, market_data: dict,
     # ── Row 3: Risk ───────────────────────────────────────────
     console.print(f"  [{DIM}]Risk & Efficiency[/{DIM}]")
     console.print(Columns([
-        _kpi("CVaR 95%",     cvar,     "red1"),
-        _kpi("SORTINO",      sortino,
+        _kpi("CVaR 95%",     f"{cvar*100:.2f}%",   "red1"),
+        _kpi("SORTINO",      f"{sortino:.2f}",
              "bright_green" if sortino > 1.5 else "yellow3" if sortino > 0.5 else "red1"),
-        _kpi("ASSET TURN.",  a_turn,   "steel_blue1"),
-        _kpi("CASH CYCLE",   f"{ccc_val:.0f}d", "steel_blue1"),
+        _kpi("ASSET TURN.",  f"{a_turn:.2f}×",     "steel_blue1"),
+        _kpi("CASH CYCLE",   f"{ccc_val:.0f}d",    "steel_blue1"),
     ], equal=False, expand=False))
     console.print()
 

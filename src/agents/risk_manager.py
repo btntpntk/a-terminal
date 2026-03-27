@@ -245,12 +245,19 @@ def check_cvar_budget(new_ticker: str,
         position_weight  = position_value / portfolio_value
         position_cvar    = position_weight * stock_cvar
 
-        # Existing CVaR load (simplified: sum of known position weights × assumed 2% CVaR each)
+        # Existing CVaR load — fetch actual CVaR per open position.
+        # Falls back to a 2% floor only when price history is unavailable.
         existing_cvar = 0.0
         if open_positions:
             for pos in open_positions:
+                try:
+                    pos_hist    = yf.Ticker(pos.ticker).history(period=period)["Close"].dropna()
+                    pos_returns = pos_hist.pct_change().dropna()
+                    pos_cvar    = calculate_cvar_95(pos_returns)
+                except Exception:
+                    pos_cvar = 0.02   # fallback floor when data unavailable
                 w = (pos.shares * pos.entry_price) / portfolio_value
-                existing_cvar += w * 0.02   # conservative 2% CVaR assumption
+                existing_cvar += w * pos_cvar
 
         total_cvar    = existing_cvar + position_cvar
         budget_ok     = total_cvar <= MAX_CVAR_BUDGET

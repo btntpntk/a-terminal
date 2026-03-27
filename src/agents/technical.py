@@ -254,7 +254,15 @@ def strategy_mean_reversion(df: pd.DataFrame, composite_risk: float = 50) -> dic
     entry  = current
     sl     = entry - (1.5 * atr_val)
     tp     = bb_mid_val                       # mean reversion target = middle BB
-    rr     = round((tp - entry) / (entry - sl), 2) if (entry - sl) > 0 else 0.0
+
+    # Guard: if price is already above the midline, the mean-reversion target is
+    # behind us — there is no valid long setup.  Zero out signal strength so the
+    # R:R gate in the orchestrator rejects this cleanly.
+    if tp <= entry:
+        rr       = 0.0
+        strength = 0
+    else:
+        rr = round((tp - entry) / (entry - sl), 2) if (entry - sl) > 0 else 0.0
 
     return {
         "strategy": "MEAN_REVERSION",
@@ -284,8 +292,10 @@ def strategy_breakout(df: pd.DataFrame, composite_risk: float = 50) -> dict:
     current      = float(close.iloc[-1])
     atr_val      = float(atr.iloc[-1])
     bb_upper_val = float(bb_upper.iloc[-1])
-    high_20d     = float(close.rolling(20).max().iloc[-1])
-    high_prev    = float(close.rolling(20).max().iloc[-2]) if len(close) > 2 else high_20d
+    # Use yesterday's rolling 20d high as the breakout reference — today's close
+    # IS part of the rolling window, so comparing current vs today's max would
+    # only fire when price equals exactly its own value.
+    high_20d_prev = float(close.rolling(20).max().iloc[-2]) if len(close) > 20 else float(close.rolling(20).max().iloc[-1])
 
     # Volume confirmation
     vol_confirmed = False
@@ -298,7 +308,7 @@ def strategy_breakout(df: pd.DataFrame, composite_risk: float = 50) -> dict:
     bb_width_prev = float(((bb_upper - bb_lower) / bb_mid).rolling(5).min().iloc[-1] * 100)
 
     strength = 0
-    if current > high_20d:       strength += 35     # breaking 20d high
+    if current > high_20d_prev:  strength += 35     # breaking prior 20d high
     if current > bb_upper_val:   strength += 25     # above upper BB
     if vol_confirmed:            strength += 25     # volume surge
     if bb_width_prev < 3.0:      strength += 15     # was compressed
@@ -312,7 +322,7 @@ def strategy_breakout(df: pd.DataFrame, composite_risk: float = 50) -> dict:
         "strategy": "BREAKOUT",
         "entry": round(entry, 4), "tp": round(tp, 4), "sl": round(sl, 4),
         "rr_ratio": rr, "signal_strength": min(strength, 100), "atr_14": round(atr_val, 4),
-        "indicators": {"bb_upper": round(bb_upper_val, 4), "high_20d": round(high_20d, 4),
+        "indicators": {"bb_upper": round(bb_upper_val, 4), "high_20d_prev": round(high_20d_prev, 4),
                        "vol_confirmed": vol_confirmed},
         "notes": "Breakout — use time stop: exit if price doesn't move within 5 sessions",
     }

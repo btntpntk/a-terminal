@@ -68,15 +68,12 @@ def calculate_yield_curve_spread() -> dict:
         if hist_2y_raw.empty:
             hist_2y_raw = tyx_2y.history(period="5d")["Close"]
 
-        # ^IRX is quoted in annualized discount rate (divide by 100 already in pct)
-        yield_10y = safe_scalar(hist_10y.iloc[-1]) / 10   # ^TNX is in tenths of a percent
-        yield_2y  = safe_scalar(hist_2y_raw.iloc[-1]) / 10
-
-        # yfinance returns these already in percentage points
+        # yfinance returns ^TNX / ^IRX / ^FVX already in percentage points
+        # (e.g. 4.5 means 4.50%). 1 pct-point = 100 bps.
         y10 = safe_scalar(hist_10y.iloc[-1])
         y2  = safe_scalar(hist_2y_raw.iloc[-1])
 
-        spread_bps = (y10 - y2) * 10   # convert to bps
+        spread_bps = (y10 - y2) * 100   # convert pct-points → basis points
 
         if spread_bps > 50:
             risk_score, signal = 20, "STEEP_GROWTH"
@@ -105,26 +102,38 @@ def calculate_hy_credit_spread() -> dict:
     """
     try:
         hyg = yf.Ticker("HYG")    # iShares HY Corp Bond ETF
-        lqd = yf.Ticker("LQD")    # IG Corp Bond — proxy for risk-free
-        iei = yf.Ticker("IEI")    # 3-7Y Treasury
+        iei = yf.Ticker("IEI")    # 3-7Y Treasury (risk-free proxy)
 
-        hyg_hist = hyg.history(period="30d")["Close"]
-        iei_hist = iei.history(period="30d")["Close"]
+        hyg_hist = hyg.history(period="60d")["Close"]
+        iei_hist = iei.history(period="60d")["Close"]
 
-        # Synthetic "spread" via rolling 30d yield-proxy: price return divergence
+        # 20-day price return divergence (used as fallback and as a direction signal)
         hyg_ret = hyg_hist.pct_change(20).iloc[-1] * 100
         iei_ret = iei_hist.pct_change(20).iloc[-1] * 100
 
-        # Approx OAS: HYG trailing yield from info
+        # Primary path: derive OAS from HYG trailing dividend yield vs current risk-free
         hyg_info = hyg.info
-        hy_yield = hyg_info.get("yield", None) or hyg_info.get("trailingAnnualDividendYield", None)
+        hy_yield = (
+            hyg_info.get("yield")
+            or hyg_info.get("trailingAnnualDividendYield")
+        )
 
-        # Estimate OAS in bps (rough proxy: HYG yield vs ~4.5% risk-free)
-        risk_free = 4.5
+        # Current 10Y yield as risk-free anchor (updated from hardcoded 4.5%)
+        try:
+            tnx_last = yf.Ticker("^TNX").history(period="5d")["Close"]
+            risk_free = float(tnx_last.iloc[-1]) if not tnx_last.empty else 4.3
+        except Exception:
+            risk_free = 4.3   # 2026 fallback
+
         if hy_yield and hy_yield > 0:
-            oas_bps = (hy_yield * 100 - risk_free) * 100
+            # hy_yield from yfinance is in decimal (e.g. 0.065 = 6.5%)
+            hy_yield_pct = hy_yield * 100
+            oas_bps = (hy_yield_pct - risk_free) * 100
         else:
-            oas_bps = (hyg_ret - iei_ret) * 50 + 300  # synthetic
+            # Fallback: amplify 20d return divergence around a realistic HY OAS baseline.
+            # Typical HY OAS range: 300–500 bps; 350 bps = neutral mid-cycle baseline.
+            # Each 1% divergence between HYG and IEI is treated as ~100 bps of OAS movement.
+            oas_bps = (hyg_ret - iei_ret) * 100 + 350
 
         if oas_bps < 300:
             risk_score, signal = 15, "TIGHT_BENIGN"
@@ -287,21 +296,25 @@ def calculate_vix_level() -> dict:
 def calculate_vix_term_structure() -> dict:
     """
     VIX Term Structure (M1/M2 Spread) — Roll Yield.
-    Roll Yield = VIX_Future_M2 − VIX_Future_M1
+    Roll Yield = VIX_3M (long end) − VIX_9D (short end)
     Edge: Backwardation → liquidity providers pull back → vol vacuums form.
+
+    Using VIX9D as the short-end M1 proxy and VIX3M as the long-end M2 proxy
+    gives a purer term-structure slope than spot-vs-3M, since VIX spot (30-day)
+    sits between the two and conflates both ends.
     """
     try:
-        # VIX futures proxies via ETPs
-        vix_spot = yf.Ticker("^VIX").history(period="5d")["Close"]
-        vix9d = yf.Ticker("^VIX9D").history(period="5d")["Close"]   # 9-day VIX
-        vix3m = yf.Ticker("^VIX3M").history(period="5d")["Close"]   # 3-month VIX
+        # VIX term structure via index proxies
+        vix9d = yf.Ticker("^VIX9D").history(period="5d")["Close"]   # short end (M1 proxy)
+        vix3m = yf.Ticker("^VIX3M").history(period="5d")["Close"]   # long end  (M2 proxy)
+        vix_spot = yf.Ticker("^VIX").history(period="5d")["Close"]  # spot — kept for output
 
-        spot = safe_scalar(vix_spot.iloc[-1])
-        short = safe_scalar(vix9d.iloc[-1]) if not vix9d.empty else spot
-        long_term = safe_scalar(vix3m.iloc[-1]) if not vix3m.empty else spot
+        spot     = safe_scalar(vix_spot.iloc[-1])
+        m1_short = safe_scalar(vix9d.iloc[-1]) if not vix9d.empty else spot
+        m2_long  = safe_scalar(vix3m.iloc[-1]) if not vix3m.empty else spot
 
-        # Roll yield: M2 - M1 (positive = contango, negative = backwardation)
-        roll_yield = long_term - spot
+        # Roll yield: long-end minus short-end (positive = contango, negative = backwardation)
+        roll_yield = m2_long - m1_short
 
         if roll_yield > 3:
             risk_score, signal = 10, "STEEP_CONTANGO"
@@ -314,7 +327,8 @@ def calculate_vix_term_structure() -> dict:
 
         return {
             "vix_spot": round(spot, 2),
-            "vix_3m": round(long_term, 2),
+            "vix_9d": round(m1_short, 2),
+            "vix_3m": round(m2_long, 2),
             "roll_yield": round(roll_yield, 2),
             "structure": "CONTANGO" if roll_yield > 0 else "BACKWARDATION",
             "signal": signal,

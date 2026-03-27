@@ -22,13 +22,30 @@ import numpy as np
 def get_fin_val(df: pd.DataFrame, keys: list, default=0.0):
     """
     Looks for multiple potential row names (keys) and returns the first found value.
+
+    Matching strategy (in order):
+      1. Exact match after stripping whitespace
+      2. Case-insensitive + whitespace-collapsed match
+         (handles yfinance returning 'OperatingIncome' vs 'Operating Income',
+          'TotalRevenue' vs 'Total Revenue', etc. — common with non-US tickers)
     """
     if df is None or df.empty:
         return default
     df.index = df.index.str.strip()
+
+    # Build a lowercase, space-collapsed lookup once — O(n) not O(n×k)
+    index_lower = {k.lower().replace(" ", ""): k for k in df.index}
+
     for key in keys:
+        # 1. Exact match
         if key in df.index:
             val = df.loc[key].iloc[0] if isinstance(df.loc[key], pd.Series) else df.loc[key]
+            return float(val) if pd.notnull(val) else default
+        # 2. Normalised match
+        norm = key.lower().replace(" ", "")
+        if norm in index_lower:
+            actual = index_lower[norm]
+            val = df.loc[actual].iloc[0] if isinstance(df.loc[actual], pd.Series) else df.loc[actual]
             return float(val) if pd.notnull(val) else default
     return default
 
@@ -54,9 +71,13 @@ def calculate_sloan_ratio(financials, cashflow, balance_sheet) -> float:
     Sloan Ratio = (Net Income − CFO) / Total Assets
     Range: <0.1 = clean accruals, >0.2 = potential earnings manipulation.
     """
-    net_income  = get_fin_val(financials,    ['Net Income', 'Net Income Common Stockholders'])
-    cfo         = get_fin_val(cashflow,      ['Cash Flow From Continuing Operating Activities', 'Operating Cash Flow'])
-    total_assets = get_fin_val(balance_sheet, ['Total Assets'])
+    net_income   = get_fin_val(financials,    ['Net Income', 'Net Income Common Stockholders',
+                                               'NetIncome', 'NetIncomeCommonStockholders'])
+    cfo          = get_fin_val(cashflow,      ['Cash Flow From Continuing Operating Activities',
+                                               'Operating Cash Flow',
+                                               'CashFlowFromContinuingOperatingActivities',
+                                               'OperatingCashFlow'])
+    total_assets = get_fin_val(balance_sheet, ['Total Assets', 'TotalAssets'])
 
     if total_assets == 0:
         return 0.0
@@ -67,19 +88,70 @@ def calculate_roic(financials, balance_sheet) -> float:
     """
     ROIC = NOPAT / Invested Capital
     Invested Capital = (Total Debt + Equity) − Cash
+
+    EBIT fallback chain:
+      1. 'EBIT' / 'Ebit'
+      2. 'Operating Income' / 'OperatingIncome'
+      3. 'Income From Operations' / 'IncomeFromOperations'
+      4. Gross Profit − Operating Expense (reconstructed)
     """
-    ebit     = get_fin_val(financials,    ['EBIT', 'Operating Income'])
-    pretax   = get_fin_val(financials,    ['Pretax Income'], default=1.0)
-    tax_prov = get_fin_val(financials,    ['Tax Provision'], default=0.0)
+    ebit = get_fin_val(financials, ['EBIT', 'Ebit',
+                                    'Operating Income', 'OperatingIncome',
+                                    'Income From Operations', 'IncomeFromOperations',
+                                    'Operating Profit', 'OperatingProfit'])
+
+    # Last-resort reconstruction: Gross Profit − Total Operating Expenses
+    if ebit == 0:
+        gross   = get_fin_val(financials, ['Gross Profit', 'GrossProfit'])
+        op_exp  = get_fin_val(financials, ['Operating Expense', 'OperatingExpense',
+                                           'Total Operating Expenses', 'TotalOperatingExpenses'])
+        if gross != 0 and op_exp != 0:
+            ebit = gross - op_exp
+
+    pretax   = get_fin_val(financials, ['Pretax Income', 'PretaxIncome'], default=1.0)
+    tax_prov = get_fin_val(financials, ['Tax Provision', 'TaxProvision'], default=0.0)
     tax_rate = max(0, min(tax_prov / pretax, 0.35)) if pretax > 0 else 0.21
 
     nopat  = ebit * (1 - tax_rate)
-    debt   = get_fin_val(balance_sheet, ['Total Debt', 'Long Term Debt'])
-    equity = get_fin_val(balance_sheet, ['Stockholders Equity', 'Total Stockholder Equity'])
-    cash   = get_fin_val(balance_sheet, ['Cash And Cash Equivalents', 'Cash'])
+    debt   = get_fin_val(balance_sheet, ['Total Debt', 'TotalDebt',
+                                         'Long Term Debt', 'LongTermDebt'])
+    equity = get_fin_val(balance_sheet, ['Stockholders Equity', 'StockholdersEquity',
+                                         'Total Stockholder Equity', 'TotalStockholderEquity',
+                                         'Total Equity Gross Minority Interest',
+                                         'TotalEquityGrossMinorityInterest'])
+    cash   = get_fin_val(balance_sheet, ['Cash And Cash Equivalents', 'CashAndCashEquivalents',
+                                         'Cash Cash Equivalents And Short Term Investments',
+                                         'CashCashEquivalentsAndShortTermInvestments', 'Cash'])
 
     invested_capital = (debt + equity) - cash
     return round(nopat / invested_capital, 4) if invested_capital > 0 else 0.0
+
+
+def _resolve_market_cap(ticker_info: dict) -> float:
+    """
+    Robust market-cap resolution for any exchange.
+
+    Priority:
+      1. ticker_info['marketCap']  — direct field (may be None for non-US tickers)
+      2. sharesOutstanding × current price  — computed (reliable for .BK, .HK, etc.)
+      3. ticker_info['enterpriseValue']     — fallback (includes net debt, slight overcount)
+      4. 0 — triggers WACC default below
+    """
+    mc = ticker_info.get('marketCap')
+    if mc and float(mc) > 0:
+        return float(mc)
+
+    shares = float(ticker_info.get('sharesOutstanding') or
+                   ticker_info.get('impliedSharesOutstanding') or 0)
+    price  = float(ticker_info.get('currentPrice') or
+                   ticker_info.get('regularMarketPrice') or
+                   ticker_info.get('previousClose') or 0)
+    computed = shares * price
+    if computed > 0:
+        return computed
+
+    ev = ticker_info.get('enterpriseValue') or 0
+    return float(ev)
 
 
 def calculate_wacc(ticker_info: dict,
@@ -89,10 +161,14 @@ def calculate_wacc(ticker_info: dict,
     """
     WACC = (E/V × Re) + (D/V × Rd × (1−Tc))
     Uses CAPM for cost of equity. 2026 proxies: Rf=4.3%, ERP=5.0%.
+
+    Robust for non-US tickers (.BK, .HK, etc.) where yfinance often omits
+    marketCap — falls back to shares × price to avoid WACC collapsing to 0.
     """
     try:
-        market_cap  = ticker_info.get('marketCap') or ticker_info.get('enterpriseValue', 0)
-        total_debt  = get_fin_val(balance_sheet, ['Total Debt', 'Long Term Debt'])
+        market_cap  = _resolve_market_cap(ticker_info)
+        total_debt  = get_fin_val(balance_sheet, ['Total Debt', 'Long Term Debt',
+                                                   'TotalDebt', 'LongTermDebt'])
         total_value = market_cap + total_debt
 
         if total_value <= 0:
@@ -104,11 +180,22 @@ def calculate_wacc(ticker_info: dict,
             beta = 1.0
         cost_of_equity = rf + (float(beta) * erp)
 
-        interest_exp  = abs(get_fin_val(cashflow, ['Interest Expense', 'Interest Paid Supplementals']))
-        cost_of_debt  = (interest_exp / total_debt) if total_debt > 0 else 0.05
+        # Interest expense: income statement is the primary source;
+        # cashflow 'Interest Paid Supplementals' is a reliable secondary.
+        interest_exp = abs(get_fin_val(financials, ['Interest Expense', 'InterestExpense']))
+        if interest_exp == 0:
+            interest_exp = abs(get_fin_val(cashflow, ['Interest Paid Supplementals',
+                                                       'Interest Expense',
+                                                       'InterestPaidSupplementals']))
+        # Cost of debt: use actual rate when available; floor at 4% if missing
+        # to prevent a silent zero-cost-of-debt from collapsing WACC.
+        if total_debt > 0 and interest_exp > 0:
+            cost_of_debt = interest_exp / total_debt
+        else:
+            cost_of_debt = 0.04   # conservative floor (IG corporate)
 
-        pretax_inc = get_fin_val(financials, ['Pretax Income'], default=1.0)
-        tax_prov   = get_fin_val(financials, ['Tax Provision'], default=0.0)
+        pretax_inc = get_fin_val(financials, ['Pretax Income', 'PretaxIncome'], default=1.0)
+        tax_prov   = get_fin_val(financials, ['Tax Provision', 'TaxProvision'], default=0.0)
         tax_rate   = max(0, min(tax_prov / pretax_inc, 0.35)) if pretax_inc > 0 else 0.21
 
         w_equity = market_cap / total_value
@@ -125,7 +212,7 @@ def calculate_fcf_quality(financials, cashflow) -> float:
     """
     FCF Quality = Free Cash Flow / Net Income
     NEW: Catches companies with high accounting income but poor cash conversion.
-    
+
     Interpretation:
       > 1.0  = exceptional cash conversion (FCF exceeds reported income)
       0.6–1.0 = healthy
@@ -134,9 +221,16 @@ def calculate_fcf_quality(financials, cashflow) -> float:
 
     Returns 0.0 if denominator is zero or negative.
     """
-    net_income  = get_fin_val(financials, ['Net Income', 'Net Income Common Stockholders'])
-    cfo         = get_fin_val(cashflow,   ['Cash Flow From Continuing Operating Activities', 'Operating Cash Flow'])
-    capex       = abs(get_fin_val(cashflow, ['Capital Expenditure', 'Purchase Of PPE'], default=0.0))
+    net_income  = get_fin_val(financials, ['Net Income', 'NetIncome',
+                                           'Net Income Common Stockholders',
+                                           'NetIncomeCommonStockholders'])
+    cfo         = get_fin_val(cashflow,   ['Cash Flow From Continuing Operating Activities',
+                                           'CashFlowFromContinuingOperatingActivities',
+                                           'Operating Cash Flow', 'OperatingCashFlow'])
+    capex       = abs(get_fin_val(cashflow, ['Capital Expenditure', 'CapitalExpenditure',
+                                             'Purchase Of PPE', 'PurchaseOfPPE',
+                                             'Capital Expenditures', 'CapitalExpenditures'],
+                                  default=0.0))
 
     fcf = cfo - capex
     if net_income <= 0:
@@ -166,13 +260,17 @@ def calculate_altman_z(financials, balance_sheet,
       1.81–2.99 → Grey zone
       Z < 1.81  → Distress
     """
-    rev              = get_fin_val(financials,    ['Total Revenue'])
-    ebit             = get_fin_val(financials,    ['EBIT', 'Operating Income'])
-    assets           = get_fin_val(balance_sheet, ['Total Assets'])
-    retained_earnings = get_fin_val(balance_sheet, ['Retained Earnings'])
-    working_cap      = get_fin_val(balance_sheet, ['Working Capital'], default=0.0)
+    rev              = get_fin_val(financials,    ['Total Revenue', 'TotalRevenue',
+                                                  'Revenue', 'Net Revenue', 'NetRevenue'])
+    ebit             = get_fin_val(financials,    ['EBIT', 'Ebit',
+                                                  'Operating Income', 'OperatingIncome',
+                                                  'Income From Operations', 'IncomeFromOperations'])
+    assets           = get_fin_val(balance_sheet, ['Total Assets', 'TotalAssets'])
+    retained_earnings = get_fin_val(balance_sheet, ['Retained Earnings', 'RetainedEarnings'])
+    working_cap      = get_fin_val(balance_sheet, ['Working Capital', 'WorkingCapital'], default=0.0)
     liabilities      = get_fin_val(balance_sheet, ['Total Liabilities Net Minority Interest',
-                                                    'Total Liabilities'])
+                                                    'TotalLiabilitiesNetMinorityInterest',
+                                                    'Total Liabilities', 'TotalLiabilities'])
 
     if assets == 0:
         return 0.0
@@ -239,8 +337,8 @@ def calculate_beta(asset_returns: pd.Series,
 
 def calculate_asset_turnover(financials, balance_sheet) -> float:
     """Revenue / Total Assets. Measures capital efficiency."""
-    revenue = get_fin_val(financials,    ['Total Revenue', 'Revenue'])
-    assets  = get_fin_val(balance_sheet, ['Total Assets'])
+    revenue = get_fin_val(financials,    ['Total Revenue', 'TotalRevenue', 'Revenue', 'Net Revenue'])
+    assets  = get_fin_val(balance_sheet, ['Total Assets', 'TotalAssets'])
     return round(revenue / assets, 4) if assets > 0 else 0.0
 
 
@@ -249,11 +347,13 @@ def calculate_ccc(financials, balance_sheet) -> float:
     Cash Conversion Cycle = DIO + DSO − DPO
     Lower (or negative) = more efficient working capital management.
     """
-    rev  = get_fin_val(financials,    ['Total Revenue'])
-    cogs = get_fin_val(financials,    ['Cost Of Revenue'])
-    inv  = get_fin_val(balance_sheet, ['Inventory'])
-    ar   = get_fin_val(balance_sheet, ['Accounts Receivable'])
-    ap   = get_fin_val(balance_sheet, ['Accounts Payable'])
+    rev  = get_fin_val(financials,    ['Total Revenue', 'TotalRevenue', 'Revenue'])
+    cogs = get_fin_val(financials,    ['Cost Of Revenue', 'CostOfRevenue',
+                                       'Cost Of Goods Sold', 'CostOfGoodsSold'])
+    inv  = get_fin_val(balance_sheet, ['Inventory', 'Inventories'])
+    ar   = get_fin_val(balance_sheet, ['Accounts Receivable', 'AccountsReceivable',
+                                       'Net Receivables', 'NetReceivables'])
+    ap   = get_fin_val(balance_sheet, ['Accounts Payable', 'AccountsPayable'])
 
     if rev == 0 or cogs == 0:
         return 0.0
@@ -333,8 +433,9 @@ def generate_alpha_score(roic: float,
 
     # ── Beta penalty (regime-scaled) ─────────────────────────
     # In calm markets (risk<40) the penalty is mild.
-    # In stressed markets (risk>70) high-beta is a volatility trap.
-    regime_multiplier = 1.0 + max(0, (composite_risk - 40) / 60)   # 1.0 to 1.5×
+    # In stressed markets (risk≥100) high-beta is a volatility trap.
+    # Range: risk=40 → 1.0×, risk=100 → 1.5×
+    regime_multiplier = 1.0 + max(0, (composite_risk - 40) / 120)  # 1.0 to 1.5×
     if beta > 2.0:   score -= 15 * regime_multiplier
     elif beta > 1.5: score -= 10 * regime_multiplier
     elif beta > 1.3: score -= 5  * regime_multiplier
