@@ -7,8 +7,8 @@ export function SectorPanel() {
   const sectors = useAppStore((s) => s.sectors) ?? data;
   const universe = useAppStore((s) => s.selectedUniverse);
 
-  if (isLoading) return <div className="panel-section"><div className="section-label">STAGE 2 · SECTORS</div><div className="loading">Loading…</div></div>;
-  if (error || !sectors) return <div className="panel-section"><div className="section-label">STAGE 2 · SECTORS</div><div className="error">Unavailable</div></div>;
+  if (isLoading) return <div className="panel-section"><div className="section-label"> · SECTORS</div><div className="loading">Loading…</div></div>;
+  if (error || !sectors) return <div className="panel-section"><div className="section-label"> · SECTORS</div><div className="error">Unavailable</div></div>;
 
   const rotationColor = sectors.sector_rotation === 'OFFENSIVE' ? 'var(--col-cyan)'
     : sectors.sector_rotation === 'DEFENSIVE' ? 'var(--col-amber)'
@@ -16,7 +16,7 @@ export function SectorPanel() {
 
   return (
     <div className="panel-section">
-      <div className="section-label">STAGE 2 · SECTORS · {universe}</div>
+      <div className="section-label"> · SECTORS · {universe}</div>
 
       <div className="kv-row" style={{ gap: 8, marginTop: 6 }}>
         <span className="kv-key">GATE:</span>

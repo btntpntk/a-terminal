@@ -10,8 +10,8 @@ export function RegimePanel() {
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['regime'] });
 
-  if (isLoading) return <div className="panel-section"><div className="section-label">STAGE 0 · MARKET REGIME</div><div className="loading">Loading…</div></div>;
-  if (error || !regime) return <div className="panel-section"><div className="section-label">STAGE 0 · MARKET REGIME</div><div className="error">Unavailable</div></div>;
+  if (isLoading) return <div className="panel-section"><div className="section-label"> · MARKET REGIME</div><div className="loading">Loading…</div></div>;
+  if (error || !regime) return <div className="panel-section"><div className="section-label"> · MARKET REGIME</div><div className="error">Unavailable</div></div>;
 
   const indicators = [
     { label: 'SPX vs 200DMA', val: regime.spx_distance_pct != null ? `${regime.spx_distance_pct >= 0 ? '+' : ''}${regime.spx_distance_pct.toFixed(1)}%` : '—', sig: regime.spx_signal, score: regime.spx_risk_score },
@@ -28,7 +28,7 @@ export function RegimePanel() {
   return (
     <div className="panel-section">
       <div className="section-header">
-        <span className="section-label">STAGE 0 · MARKET REGIME</span>
+        <span className="section-label"> · MARKET REGIME</span>
         <button className="refresh-btn" onClick={refresh} title="Refresh">↺</button>
       </div>
 

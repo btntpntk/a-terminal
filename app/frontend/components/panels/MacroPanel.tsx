@@ -19,8 +19,8 @@ export function MacroPanel() {
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['macro'] });
 
-  if (isLoading) return <div className="panel-section"><div className="section-label">STAGE 1 · GLOBAL MACRO</div><div className="loading">Loading…</div></div>;
-  if (error || !macro) return <div className="panel-section"><div className="section-label">STAGE 1 · GLOBAL MACRO</div><div className="error">Unavailable</div></div>;
+  if (isLoading) return <div className="panel-section"><div className="section-label"> · GLOBAL MACRO</div><div className="loading">Loading…</div></div>;
+  if (error || !macro) return <div className="panel-section"><div className="section-label"> · GLOBAL MACRO</div><div className="error">Unavailable</div></div>;
 
   const signalRows: SignalRow[] = [
     { key: 'real_yield', label: 'REAL YLD', detail: macro.real_yield, weight: macro.signal_weights['real_yield'] ?? 20, score: macro.raw_scores['real_yield'] ?? 0 },
@@ -40,7 +40,7 @@ export function MacroPanel() {
   return (
     <div className="panel-section">
       <div className="section-header">
-        <span className="section-label">STAGE 1 · GLOBAL MACRO</span>
+        <span className="section-label"> · GLOBAL MACRO</span>
         <button className="refresh-btn" onClick={refresh} title="Refresh">↺</button>
       </div>
 
