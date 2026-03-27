@@ -528,13 +528,13 @@ html, body, #root {
 }
 
 .drawer {
-  width: 480px;
+  width: 65vw;
   background: var(--col-elevated);
   border-left: 1px solid var(--col-border);
   height: 100%;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--col-border) transparent;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .drawer-header {

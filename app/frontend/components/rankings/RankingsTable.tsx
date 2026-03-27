@@ -1,10 +1,16 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRankings } from '../../hooks/useQueries';
 import { useAppStore } from '../../store/useAppStore';
 import { TickerDrawer } from '../ranking/TickerDrawer';
 import { fmt, scoreColor, riskColor } from '../../lib/format';
 import type { TickerRow } from '../../types/api';
+
+const COL_PX    = [32, 80, 100, 56, 52, 52, 44, 52, 44, 48, 36, 88, 36, 44, 64, 64, 64, 44, 72];
+const COL_TOTAL = COL_PX.reduce((a, b) => a + b, 0);
+const COL_PCT   = COL_PX.map((w) => `${((w / COL_TOTAL) * 100).toFixed(3)}%`);
+const COL_HEADS = ['#','TICKER','SECTOR','SCORE','ALPHA','MOAT','Z','SLOAN','FCF','SORT','β','STRAT','SS','R:R','ENTRY','TP','SL','GATE','VERDICT'];
+const LEFT_ALIGN = new Set(['#', 'TICKER', 'SECTOR', 'STRAT']);
 
 const VERDICT_LABELS: Record<string, string> = {
   BUY: 'BUY', FUND_ONLY: 'FUND', TECH_ONLY: 'TECH', FAIL: 'FAIL',
@@ -27,6 +33,20 @@ function GateCell({ g3, g4 }: { g3: boolean; g4: boolean }) {
   );
 }
 
+// Shared cell style helper
+function cell(i: number, extra?: React.CSSProperties): React.CSSProperties {
+  return {
+    width: COL_PCT[i],
+    flexShrink: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    padding: '0 6px',
+    textAlign: LEFT_ALIGN.has(COL_HEADS[i]) ? 'left' : 'right',
+    ...extra,
+  };
+}
+
 export function RankingsTable() {
   const { data, isLoading, error } = useRankings();
   const {
@@ -40,15 +60,12 @@ export function RankingsTable() {
   } = useAppStore();
 
   const rankings = useAppStore((s) => s.rankings) ?? data;
-
   const parentRef = useRef<HTMLDivElement>(null);
 
-  // Derive unique sectors for filter
   const allSectors = rankings
     ? Array.from(new Set(rankings.rows.map((r) => r.sector))).sort()
     : [];
 
-  // Filter rows
   const filteredRows: TickerRow[] = (rankings?.rows ?? []).filter((r) => {
     if (verdictFilter !== 'ALL' && r.verdict !== verdictFilter) return false;
     if (sectorFilter && r.sector !== sectorFilter) return false;
@@ -70,7 +87,6 @@ export function RankingsTable() {
     'ALL', 'BUY', 'FUND_ONLY', 'TECH_ONLY', 'FAIL',
   ];
 
-  // Header
   const Header = () => (
     <div className="panel-section" style={{ borderBottom: '1px solid var(--col-border)', paddingBottom: 8 }}>
       <div className="section-header">
@@ -122,7 +138,6 @@ export function RankingsTable() {
     </div>
   );
 
-  // Empty / loading states
   if (isLoading) {
     return (
       <div className="rankings-wrap">
@@ -137,9 +152,7 @@ export function RankingsTable() {
       <div className="rankings-wrap">
         <Header />
         <div className="empty-state">
-          <div style={{ color: 'var(--col-dim)', fontSize: '13px', marginBottom: 12 }}>
-            No rankings data
-          </div>
+          <div style={{ color: 'var(--col-dim)', fontSize: '13px', marginBottom: 12 }}>No rankings data</div>
           <div style={{ color: 'var(--col-dim)', fontSize: '11px', marginBottom: 20 }}>
             Press <span style={{ color: 'var(--col-amber)' }}>▶ RUN SCAN</span> to generate rankings for {selectedUniverse}
           </div>
@@ -148,82 +161,72 @@ export function RankingsTable() {
     );
   }
 
-  const items = virtualizer.getVirtualItems();
-
   return (
     <div className="rankings-wrap">
       <Header />
 
-      {/* Table header */}
-      <div style={{ overflowX: 'auto', flexShrink: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--col-amber)', opacity: 0.7 }}>
-              {['#','TICKER','SECTOR','SCORE','ALPHA','MOAT','Z','SLOAN','FCF','SORT','β','STRAT','SS','R:R','ENTRY','TP','SL','GATE','VERDICT'].map((h) => (
-                <th key={h} style={{
-                  color: 'var(--col-amber)', fontSize: '9px', padding: '4px 6px',
-                  textAlign: h === '#' || h === 'TICKER' || h === 'SECTOR' || h === 'STRAT' ? 'left' : 'right',
-                  whiteSpace: 'nowrap', fontWeight: 500, letterSpacing: '0.5px',
-                }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-        </table>
-      </div>
+      <div className="table-scroll-wrap" ref={parentRef} style={{ overflowY: 'auto', overflowX: 'hidden' }}>
 
-      {/* Virtual body */}
-      <div className="table-scroll-wrap" ref={parentRef} style={{ overflowY: 'auto', overflowX: 'auto' }}>
-        <div style={{ height: virtualizer.getTotalSize(), width: '100%', minWidth: 1100, position: 'relative' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100, tableLayout: 'fixed' }}>
-            <colgroup>
-              <col style={{ width: 32 }} /><col style={{ width: 80 }} /><col style={{ width: 100 }} />
-              <col style={{ width: 56 }} /><col style={{ width: 52 }} /><col style={{ width: 52 }} />
-              <col style={{ width: 44 }} /><col style={{ width: 52 }} /><col style={{ width: 44 }} />
-              <col style={{ width: 48 }} /><col style={{ width: 36 }} /><col style={{ width: 88 }} />
-              <col style={{ width: 36 }} /><col style={{ width: 44 }} /><col style={{ width: 64 }} />
-              <col style={{ width: 64 }} /><col style={{ width: 64 }} /><col style={{ width: 44 }} />
-              <col style={{ width: 72 }} />
-            </colgroup>
-            <tbody>
-              {items.map((vRow) => {
-                const row = filteredRows[vRow.index];
-                const rank = vRow.index + 1;
-                return (
-                  <tr
-                    key={row.ticker}
-                    style={{
-                      position: 'absolute', top: vRow.start, left: 0, width: '100%',
-                      height: vRow.size, display: 'table', tableLayout: 'fixed',
-                      cursor: 'pointer', borderBottom: '1px solid #141414',
-                    }}
-                    onClick={() => setSelectedTicker(row.ticker)}
-                  >
-                    <td style={{ fontSize: '10px', padding: '2px 6px', color: 'var(--col-amber)', textAlign: 'left' }}>{rank}</td>
-                    <td style={{ fontSize: '11px', padding: '2px 6px', color: 'var(--col-amber)', textAlign: 'left', fontWeight: 500 }}>{row.ticker}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', color: 'var(--col-dim)', textAlign: 'left' }}>{row.sector}</td>
-                    <td style={{ fontSize: '11px', padding: '2px 6px', textAlign: 'right', color: scoreColor(row.rank_score), fontWeight: 500 }}>{fmt.score(row.rank_score)}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right', color: scoreColor(row.alpha) }}>{fmt.score(row.alpha)}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right', color: (row.moat ?? 0) >= 0 ? 'var(--col-buy)' : 'var(--col-red)' }}>{fmt.float2(row.moat)}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right', color: (row.z ?? 99) < 1.81 ? 'var(--col-red)' : 'var(--col-body)' }}>{fmt.z(row.z)}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right', color: (row.sloan ?? 0) > 0.1 ? 'var(--col-red)' : 'var(--col-body)' }}>{fmt.float2(row.sloan)}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right' }}>{fmt.float2(row.fcf_q)}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right', color: (row.sortino ?? 0) >= 1 ? 'var(--col-buy)' : 'var(--col-body)' }}>{fmt.float2(row.sortino)}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right' }}>{fmt.float2(row.beta)}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'left', color: 'var(--col-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.strategy}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right', color: riskColor(row.signal_str) }}>{row.signal_str}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right', color: row.rr >= 1.5 ? 'var(--col-buy)' : 'var(--col-dim)' }}>{row.rr.toFixed(1)}x</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right', color: 'var(--col-amber)' }}>{fmt.price(row.entry)}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right', color: 'var(--col-buy)' }}>{fmt.price(row.tp)}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right', color: 'var(--col-red)' }}>{fmt.price(row.sl)}</td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right' }}><GateCell g3={row.gate3} g4={row.gate4} /></td>
-                    <td style={{ fontSize: '10px', padding: '2px 6px', textAlign: 'right' }}><VerdictPill verdict={row.verdict} /></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        {/* Sticky header row — flex div, same widths as data rows */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 2,
+          background: 'var(--col-surface)',
+          display: 'flex', alignItems: 'center',
+          borderBottom: '1px solid var(--col-amber)',
+          height: 26,
+        }}>
+          {COL_HEADS.map((h, i) => (
+            <div key={h} style={{
+              width: COL_PCT[i], flexShrink: 0,
+              color: 'var(--col-amber)', fontSize: '9px',
+              padding: '0 6px',
+              textAlign: LEFT_ALIGN.has(h) ? 'left' : 'right',
+              whiteSpace: 'nowrap', fontWeight: 500, letterSpacing: '0.5px',
+              overflow: 'hidden', opacity: 0.85,
+            }}>
+              {h}
+            </div>
+          ))}
+        </div>
+
+        {/* Virtual rows container */}
+        <div style={{ position: 'relative', height: virtualizer.getTotalSize() }}>
+          {virtualizer.getVirtualItems().map((vRow) => {
+            const row = filteredRows[vRow.index];
+            const rank = vRow.index + 1;
+            return (
+              <div
+                key={row.ticker}
+                style={{
+                  position: 'absolute', top: vRow.start, left: 0,
+                  width: '100%', height: vRow.size,
+                  display: 'flex', alignItems: 'center',
+                  cursor: 'pointer', borderBottom: '1px solid #141414',
+                }}
+                onClick={() => setSelectedTicker(row.ticker)}
+              >
+                <div style={cell(0,  { fontSize: '10px', color: 'var(--col-amber)' })}>{rank}</div>
+                <div style={cell(1,  { fontSize: '11px', color: 'var(--col-amber)', fontWeight: 500 })}>{row.ticker}</div>
+                <div style={cell(2,  { fontSize: '10px', color: 'var(--col-dim)' })}>{row.sector}</div>
+                <div style={cell(3,  { fontSize: '11px', color: scoreColor(row.rank_score), fontWeight: 500 })}>{fmt.score(row.rank_score)}</div>
+                <div style={cell(4,  { fontSize: '10px', color: scoreColor(row.alpha) })}>{fmt.score(row.alpha)}</div>
+                <div style={cell(5,  { fontSize: '10px', color: (row.moat ?? 0) >= 0 ? 'var(--col-buy)' : 'var(--col-red)' })}>{fmt.float2(row.moat)}</div>
+                <div style={cell(6,  { fontSize: '10px', color: (row.z ?? 99) < 1.81 ? 'var(--col-red)' : 'var(--col-body)' })}>{fmt.z(row.z)}</div>
+                <div style={cell(7,  { fontSize: '10px', color: (row.sloan ?? 0) > 0.1 ? 'var(--col-red)' : 'var(--col-body)' })}>{fmt.float2(row.sloan)}</div>
+                <div style={cell(8,  { fontSize: '10px' })}>{fmt.float2(row.fcf_q)}</div>
+                <div style={cell(9,  { fontSize: '10px', color: (row.sortino ?? 0) >= 1 ? 'var(--col-buy)' : 'var(--col-body)' })}>{fmt.float2(row.sortino)}</div>
+                <div style={cell(10, { fontSize: '10px' })}>{fmt.float2(row.beta)}</div>
+                <div style={cell(11, { fontSize: '10px' })}>{row.strategy}</div>
+                <div style={cell(12, { fontSize: '10px', color: riskColor(row.signal_str) })}>{row.signal_str}</div>
+                <div style={cell(13, { fontSize: '10px', color: row.rr >= 1.5 ? 'var(--col-buy)' : 'var(--col-dim)' })}>{row.rr.toFixed(1)}x</div>
+                <div style={cell(14, { fontSize: '10px', color: 'var(--col-amber)' })}>{fmt.price(row.entry)}</div>
+                <div style={cell(15, { fontSize: '10px', color: 'var(--col-buy)' })}>{fmt.price(row.tp)}</div>
+                <div style={cell(16, { fontSize: '10px', color: 'var(--col-red)' })}>{fmt.price(row.sl)}</div>
+                <div style={cell(17, { fontSize: '10px' })}><GateCell g3={row.gate3} g4={row.gate4} /></div>
+                <div style={cell(18, { fontSize: '10px' })}><VerdictPill verdict={row.verdict} /></div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

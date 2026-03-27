@@ -48,7 +48,7 @@ export function Topbar() {
         onChange={(e) => handleUniverseChange(e.target.value)}
       >
         {universes?.map((u) => (
-          <option key={u} value={u}>{u}</option>
+          <option key={u.key} value={u.key}>{u.display_name}</option>
         )) ?? <option value="SET100">SET100</option>}
       </select>
 

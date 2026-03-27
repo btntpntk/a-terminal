@@ -521,6 +521,50 @@ async def get_rankings(universe: str):
 
 
 # ─────────────────────────────────────────────────────────────
+# ROUTES — PRICE HISTORY
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/api/price/{ticker}", tags=["Price"])
+async def get_price_history(ticker: str, period: str = Query("3mo")):
+    """
+    Return daily OHLCV bars for a ticker (via yfinance).
+    period: 1mo | 3mo | 6mo | 1y | 2y
+    Cached for 1 hour.
+    """
+    cache_key = f"price_{ticker}_{period}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    import yfinance as yf
+
+    def _fetch():
+        df = yf.download(ticker, period=period, interval="1d",
+                         auto_adjust=True, progress=False, multi_level_index=False)
+        if df.empty:
+            return None
+        bars = []
+        for ts, row in df.iterrows():
+            try:
+                o, h, l, c = float(row["Open"]), float(row["High"]), float(row["Low"]), float(row["Close"])
+                if any(math.isnan(v) for v in [o, h, l, c]):
+                    continue
+                vol = float(row.get("Volume", 0) or 0)
+                bars.append({"time": ts.strftime("%Y-%m-%d"), "open": o, "high": h, "low": l, "close": c, "volume": vol})
+            except Exception:
+                continue
+        return bars
+
+    bars = await asyncio.to_thread(_fetch)
+    if not bars:
+        raise HTTPException(status_code=404, detail=f"No price data for {ticker}")
+
+    result = {"ticker": ticker, "bars": bars}
+    cache.set(cache_key, result, ttl_seconds=3600)
+    return result
+
+
+# ─────────────────────────────────────────────────────────────
 # ROUTES — ADMIN
 # ─────────────────────────────────────────────────────────────
 

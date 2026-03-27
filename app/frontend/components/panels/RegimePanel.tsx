@@ -78,28 +78,23 @@ export function RegimePanel() {
 
       <div className="terminal-rule" />
 
-      <div className="layer-scores">
-        <div className="layer-row">
-          <span className="layer-label">Regime</span>
-          <span className="score-bar" style={{ color: riskColor(regime.layer_scores.regime) }}>
-            {scoreBar(regime.layer_scores.regime)}
-          </span>
-          <span className="layer-num">{regime.layer_scores.regime}</span>
-        </div>
-        <div className="layer-row">
-          <span className="layer-label">Fragility</span>
-          <span className="score-bar" style={{ color: riskColor(regime.layer_scores.fragility) }}>
-            {scoreBar(regime.layer_scores.fragility)}
-          </span>
-          <span className="layer-num">{regime.layer_scores.fragility}</span>
-        </div>
-        <div className="layer-row">
-          <span className="layer-label">Trigger</span>
-          <span className="score-bar" style={{ color: riskColor(regime.layer_scores.trigger) }}>
-            {scoreBar(regime.layer_scores.trigger)}
-          </span>
-          <span className="layer-num">{regime.layer_scores.trigger}</span>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {([
+          ['Regime',    regime.layer_scores.regime],
+          ['Fragility', regime.layer_scores.fragility],
+          ['Trigger',   regime.layer_scores.trigger],
+        ] as [string, number][]).map(([label, score], i) => (
+          <>
+            {i > 0 && <span key={`sep-${i}`} style={{ color: 'var(--col-border)', fontSize: '10px', flexShrink: 0 }}>|</span>}
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0 }}>
+              <span className="layer-label" style={{ flexShrink: 0 }}>{label}</span>
+              <span className="score-bar" style={{ color: riskColor(score), letterSpacing: '-1px', fontSize: '10px', flex: 1 }}>
+                {scoreBar(score)}
+              </span>
+              <span className="layer-num" style={{ color: riskColor(score), flexShrink: 0 }}>{score}</span>
+            </div>
+          </>
+        ))}
       </div>
     </div>
   );

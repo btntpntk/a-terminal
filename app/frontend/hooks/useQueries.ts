@@ -67,6 +67,15 @@ export function useRankings() {
   });
 }
 
+export function usePriceHistory(ticker: string | null, period = '3mo') {
+  return useQuery({
+    queryKey: ['price', ticker, period],
+    queryFn: () => api.price(ticker!, period),
+    enabled: !!ticker,
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
 export function useHealth() {
   return useQuery({
     queryKey: ['health'],
