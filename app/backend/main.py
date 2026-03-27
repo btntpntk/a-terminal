@@ -587,3 +587,58 @@ async def health():
         "timestamp": datetime.utcnow().isoformat(),
         "universes": list(UNIVERSE_REGISTRY.keys()),
     }
+
+
+@app.get("/api/debug/financials/{ticker}", tags=["Admin"])
+async def debug_financials(ticker: str):
+    """
+    Temporary debug endpoint — returns raw yfinance field names for a ticker.
+    Use this to diagnose ROIC/WACC = 0 for non-US tickers (.BK etc.).
+    Call: GET /api/debug/financials/PTTEP.BK
+    Remove once field name issues are resolved.
+    """
+    import yfinance as yf
+    from src.data.providers import _enrich_info
+
+    def _fetch():
+        stock   = yf.Ticker(ticker)
+        history = stock.history(period="5d")
+        info    = _enrich_info(dict(stock.info), history)
+
+        fin_index = list(stock.financials.index) if stock.financials is not None and not stock.financials.empty else []
+        bs_index  = list(stock.balance_sheet.index) if stock.balance_sheet is not None and not stock.balance_sheet.empty else []
+        cf_index  = list(stock.cashflow.index) if stock.cashflow is not None and not stock.cashflow.empty else []
+
+        # Sample first column values for key rows
+        def _sample(df, rows):
+            out = {}
+            if df is None or df.empty:
+                return out
+            for r in rows:
+                if r in df.index:
+                    try:
+                        out[r] = float(df.loc[r].iloc[0])
+                    except Exception:
+                        out[r] = None
+            return out
+
+        ebit_candidates = ["EBIT", "Ebit", "Operating Income", "OperatingIncome",
+                           "Income From Operations", "IncomeFromOperations"]
+        rev_candidates  = ["Total Revenue", "TotalRevenue", "Revenue"]
+        debt_candidates = ["Total Debt", "TotalDebt", "Long Term Debt", "LongTermDebt"]
+
+        return {
+            "ticker":              ticker,
+            "financials_fields":   fin_index,
+            "balance_sheet_fields":bs_index,
+            "cashflow_fields":     cf_index,
+            "ebit_probe":          _sample(stock.financials, ebit_candidates),
+            "revenue_probe":       _sample(stock.financials, rev_candidates),
+            "debt_probe":          _sample(stock.balance_sheet, debt_candidates),
+            "market_cap_in_info":  info.get("marketCap"),
+            "shares_outstanding":  info.get("sharesOutstanding"),
+            "current_price":       info.get("currentPrice") or info.get("regularMarketPrice"),
+        }
+
+    result = await asyncio.to_thread(_fetch)
+    return _clean_floats(result)
