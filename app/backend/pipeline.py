@@ -10,6 +10,7 @@ from __future__ import annotations
 import yfinance as yf
 import numpy as np
 
+from src.data.providers import _enrich_info
 from src.agents.market_risk import (
     calculate_spx_200dma_buffer,
     calculate_yield_curve_spread,
@@ -175,7 +176,10 @@ def analyze_ticker(
 
         returns = history["Close"].pct_change().dropna()
         price   = float(history["Close"].iloc[-1])
-        fin, bs, cf, info = stock.financials, stock.balance_sheet, stock.cashflow, stock.info
+        fin, bs, cf = stock.financials, stock.balance_sheet, stock.cashflow
+        # Enrich info so marketCap is available for non-US tickers (.BK etc.)
+        # This is the same enrichment applied in providers.py for the CLI path.
+        info = _enrich_info(dict(stock.info), history)
 
         # ── Stage 3 ───────────────────────────────────────────
         sector_name  = get_sector_for_ticker(ticker, universe=universe)
@@ -233,14 +237,16 @@ def analyze_ticker(
             "sector":       sector_name,
             "price":        price,
             "alpha":        alpha,
-            "roic":         roic,
-            "wacc":         wacc,
-            "moat":         roic - wacc,
+            # Rates sent as percentage points (×100) so frontend displays directly.
+            # e.g. ROIC 14.2% is sent as 14.2, not 0.142.
+            "roic":         round(roic  * 100, 2),
+            "wacc":         round(wacc  * 100, 2),
+            "moat":         round((roic - wacc) * 100, 2),
+            "cvar":         round(cvar  * 100, 2),
             "z":            z,
             "sloan":        sloan,
             "fcf_q":        fcf_q,
             "beta":         beta,
-            "cvar":         cvar,
             "sortino":      sortino,
             "a_turn":       a_turn,
             "ccc":          ccc_val,

@@ -173,14 +173,14 @@ class TickerRow(BaseModel):
     price:   Optional[float] = None
     # Fundamentals
     alpha:        float
-    roic:         Optional[float] = None
-    wacc:         Optional[float] = None
-    moat:         Optional[float] = None
+    roic:         Optional[float] = None   # percentage points, e.g. 14.2 means 14.2%
+    wacc:         Optional[float] = None   # percentage points, e.g. 6.5 means 6.5%
+    moat:         Optional[float] = None   # percentage points, e.g. +7.7 means ROIC 7.7pp above WACC
     z:            Optional[float] = None
     sloan:        Optional[float] = None
     fcf_q:        Optional[float] = None
     beta:         Optional[float] = None
-    cvar:         Optional[float] = None
+    cvar:         Optional[float] = None   # percentage points, e.g. 1.8 means 1.8% daily tail loss
     sortino:      Optional[float] = None
     a_turn:       Optional[float] = None
     ccc:          Optional[float] = None
