@@ -1,0 +1,12 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -f
+      - app/backend/Dockerfile
+      - -t
+      - asia-southeast1-docker.pkg.dev/alphas-terminal/alphas-terminal-repo/backend:latest
+      - .
+
+images:
+  - asia-southeast1-docker.pkg.dev/alphas-terminal/alphas-terminal-repo/backend:latest

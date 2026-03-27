@@ -1,0 +1,17 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -f
+      - app/frontend/Dockerfile
+      - --build-arg
+      - VITE_API_URL=${_VITE_API_URL}
+      - -t
+      - asia-southeast1-docker.pkg.dev/alphas-terminal/alphas-terminal-repo/frontend:latest
+      - app/frontend/
+
+images:
+  - asia-southeast1-docker.pkg.dev/alphas-terminal/alphas-terminal-repo/frontend:latest
+
+substitutions:
+  _VITE_API_URL: 'http://localhost:8000'
