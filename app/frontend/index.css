@@ -681,6 +681,1302 @@ html, body, #root {
   text-align: center;
 }
 
+/* ─── View Toggle / Topbar wrapper ─────────────────────────── */
+.topbar-with-viewtoggle {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  background: var(--col-surface);
+  border-bottom: 1px solid var(--col-border);
+}
+
+.topbar-with-viewtoggle .topbar {
+  flex: 1;
+  border-bottom: none;
+}
+
+.view-toggle-btn {
+  flex: none;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--col-border);
+  color: var(--col-dim);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 0 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, background 0.15s;
+}
+
+.view-toggle-btn:hover {
+  color: var(--col-amber);
+  background: rgba(255,140,0,0.06);
+}
+
+/* ─── Tab System Root ───────────────────────────────────────── */
+.tab-system-root {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ─── Tab Bar ───────────────────────────────────────────────── */
+.tab-bar {
+  flex: none;
+  height: 36px;
+  display: flex;
+  align-items: stretch;
+  background: var(--col-surface);
+  border-bottom: 1px solid var(--col-border);
+}
+
+.tab-list {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.tab-list::-webkit-scrollbar { display: none; }
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-right: 1px solid var(--col-border);
+  cursor: pointer;
+  color: var(--col-dim);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+  user-select: none;
+}
+
+.tab-item:hover {
+  background: var(--col-elevated);
+  color: var(--col-body);
+}
+
+.tab-item.active {
+  background: var(--col-elevated);
+  color: var(--col-amber);
+  border-bottom: 2px solid var(--col-amber);
+}
+
+.tab-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-rename-input {
+  background: var(--col-bg);
+  border: 1px solid var(--col-amber);
+  color: var(--col-body);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 1px 4px;
+  width: 90px;
+  outline: none;
+  border-radius: 0;
+}
+
+.tab-close {
+  background: transparent;
+  border: none;
+  color: var(--col-dim);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: color 0.1s;
+}
+
+.tab-close:hover { color: var(--col-red); }
+
+.tab-add {
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--col-border);
+  color: var(--col-dim);
+  font-family: inherit;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.1s, background 0.1s;
+}
+
+.tab-add:hover { color: var(--col-amber); background: var(--col-elevated); }
+
+/* ─── Widget Picker (in Topbar) ─────────────────────────────── */
+.widget-picker-wrap {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border-left: 1px solid var(--col-border);
+}
+
+.widget-picker-btn {
+  background: transparent;
+  border: 1px solid var(--col-amber);
+  color: var(--col-amber);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 4px 12px;
+  height: 28px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.widget-picker-btn:hover,
+.widget-picker-btn.active {
+  background: rgba(255,140,0,0.12);
+}
+
+.widget-picker-panel {
+  position: fixed;
+  top: 48px;
+  right: 80px;
+  width: 260px;
+  background: var(--col-surface);
+  border: 1px solid var(--col-amber);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+  z-index: 1000;
+}
+
+.widget-picker-header {
+  padding: 8px 12px;
+  color: var(--col-amber);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  border-bottom: 1px solid var(--col-border);
+  background: var(--col-elevated);
+}
+
+.widget-picker-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--col-border);
+  text-align: left;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.widget-picker-item:last-child { border-bottom: none; }
+
+.widget-picker-item:hover {
+  background: var(--col-elevated);
+}
+
+.widget-picker-item:hover .widget-picker-label {
+  color: var(--col-amber);
+}
+
+.widget-picker-label {
+  color: var(--col-body);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  transition: color 0.1s;
+}
+
+.widget-picker-desc {
+  color: var(--col-dim);
+  font-family: inherit;
+  font-size: 10px;
+}
+
+/* ─── Tab Canvas ────────────────────────────────────────────── */
+.tab-canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--col-border) transparent;
+}
+
+.widget-grid {
+  min-height: 100%;
+}
+
+/* react-grid-layout placeholder */
+.react-grid-placeholder {
+  background: rgba(255,140,0,0.1) !important;
+  border: 1px dashed var(--col-amber) !important;
+  border-radius: 0 !important;
+}
+
+/* ─── Widget Cell / Frame ───────────────────────────────────── */
+.widget-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.widget-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--col-surface);
+  border: 1px solid var(--col-border);
+  overflow: hidden;
+}
+
+.widget-header {
+  flex: none;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  background: var(--col-elevated);
+  border-bottom: 1px solid var(--col-border);
+  cursor: grab;
+}
+
+.widget-header:active { cursor: grabbing; }
+
+.widget-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--col-amber);
+  opacity: 0.8;
+  flex: none;
+}
+
+.widget-ticker-area {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.widget-ticker-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  color: var(--col-cyan);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: right;
+  width: 80px;
+  outline: none;
+  letter-spacing: 1px;
+  transition: border-color 0.15s;
+}
+
+.widget-ticker-input:focus {
+  border-bottom-color: var(--col-cyan);
+  background: rgba(0,180,216,0.05);
+}
+
+.widget-close {
+  background: transparent;
+  border: none;
+  color: var(--col-dim);
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  flex: none;
+  transition: color 0.1s;
+}
+
+.widget-close:hover { color: var(--col-red); }
+
+.widget-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--col-border) transparent;
+}
+
+.widget-loading {
+  color: var(--col-dim);
+  font-size: 11px;
+  padding: 16px;
+  text-align: center;
+}
+
+.widget-error {
+  color: var(--col-red);
+  font-size: 11px;
+  padding: 16px;
+  text-align: center;
+}
+
+/* ─── Historical Price Widget ───────────────────────────────── */
+.hist-price-wrap {
+  overflow: auto;
+  height: 100%;
+}
+
+.hist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+.hist-table th {
+  position: sticky;
+  top: 0;
+  background: var(--col-elevated);
+  color: var(--col-amber);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-align: right;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--col-border);
+}
+
+.hist-table th:first-child { text-align: left; }
+
+.hist-table td {
+  text-align: right;
+  padding: 3px 8px;
+  border-bottom: 1px solid #141414;
+  color: var(--col-body);
+  white-space: nowrap;
+}
+
+.hist-table td:first-child { text-align: left; }
+.hist-table tr:hover td { background: #141414; }
+
+.hist-date { color: var(--col-dim); }
+
+/* ─── Market Overview Widget ────────────────────────────────── */
+.market-overview-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.market-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid #141414;
+  cursor: pointer;
+  transition: background 0.1s;
+  gap: 8px;
+}
+
+.market-row:hover { background: #141414; }
+
+.market-row-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.market-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--col-body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.market-ticker {
+  font-size: 9px;
+}
+
+.market-row-mid {
+  flex: none;
+}
+
+.market-row-right {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.market-price {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--col-body);
+}
+
+.market-change {
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/* ─── Watchlist Widget ──────────────────────────────────────── */
+.watchlist-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.watchlist-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--col-border);
+}
+
+.watchlist-input {
+  flex: 1;
+  background: var(--col-bg);
+  border: 1px solid var(--col-amber);
+  color: var(--col-body);
+  font-family: inherit;
+  font-size: 10px;
+  padding: 2px 6px;
+  outline: none;
+  border-radius: 0;
+}
+
+.watchlist-btn {
+  background: transparent;
+  border: 1px solid var(--col-border);
+  color: var(--col-dim);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.1s, border-color 0.1s;
+}
+
+.watchlist-btn:hover { color: var(--col-amber); border-color: var(--col-amber); }
+
+.watchlist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+.watchlist-table th {
+  position: sticky;
+  top: 0;
+  background: var(--col-elevated);
+  color: var(--col-amber);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-align: right;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--col-border);
+}
+
+.watchlist-table th:first-child { text-align: left; }
+
+.watchlist-table td {
+  text-align: right;
+  padding: 3px 8px;
+  border-bottom: 1px solid #141414;
+  color: var(--col-body);
+  white-space: nowrap;
+}
+
+.watchlist-table td:first-child { text-align: left; }
+
+.watchlist-row { cursor: pointer; transition: background 0.1s; }
+.watchlist-row:hover td { background: #141414; }
+
+/* ─── Price Target (chart) Widget ───────────────────────────── */
+.price-target-wrap {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.price-target-chart {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.2s;
+}
+
+/* ─── Ticker Profile Widget ─────────────────────────────────── */
+.profile-wrap {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-summary {
+  color: var(--col-dim);
+  font-size: 10px;
+  line-height: 1.5;
+  border-left: 2px solid var(--col-amber);
+  padding-left: 8px;
+}
+
+.profile-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-section-label {
+  color: var(--col-amber);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+  opacity: 0.8;
+}
+
+.profile-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 2px 0;
+  border-bottom: 1px solid #141414;
+  gap: 8px;
+}
+
+.profile-key {
+  color: var(--col-dim);
+  font-size: 10px;
+  min-width: 100px;
+}
+
+.profile-val {
+  color: var(--col-body);
+  font-size: 10px;
+  font-weight: 500;
+  text-align: right;
+}
+
+/* ─── Ticker Info Widget ────────────────────────────────────── */
+.ticker-info-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  height: 100%;
+}
+
+.ticker-info-left {
+  flex: none;
+}
+
+.ticker-info-right {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+}
+
+.ti-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ti-label {
+  color: var(--col-dim);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
+.ti-val {
+  color: var(--col-body);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ti-sector {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--col-dim);
+}
+
+/* ─── Widget Picker group label ─────────────────────────────── */
+.widget-picker-group {
+  padding: 4px 12px 2px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: var(--col-dim);
+  background: var(--col-bg);
+  border-bottom: 1px solid var(--col-border);
+}
+
+/* ─── Widget Header refinements ─────────────────────────────── */
+.widget-ticker-prefix {
+  color: var(--col-dim);
+  font-size: 10px;
+  margin-right: 2px;
+  flex: none;
+}
+
+/* ─── Shared widget table ───────────────────────────────────── */
+.w-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+.w-table th {
+  position: sticky;
+  top: 0;
+  background: var(--col-elevated);
+  color: var(--col-amber);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-align: right;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--col-border);
+  white-space: nowrap;
+}
+.w-table td {
+  text-align: right;
+  padding: 2px 6px;
+  border-bottom: 1px solid #141414;
+  color: var(--col-body);
+  white-space: nowrap;
+}
+.w-table tr:hover td { background: #141414; }
+
+/* ─── Market Overview Widget (card grid) ────────────────────── */
+.mkt-overview-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.mkt-add-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid #1a1a1a;
+  flex-wrap: wrap;
+}
+.mkt-add-input {
+  background: #141414;
+  border: 1px solid var(--col-border);
+  color: var(--col-body);
+  font-size: 10px;
+  padding: 2px 6px;
+  width: 80px;
+  border-radius: 2px;
+  outline: none;
+}
+.mkt-add-input:focus { border-color: var(--col-amber); }
+.mkt-add-btn {
+  background: none;
+  border: 1px solid var(--col-border);
+  color: var(--col-amber);
+  font-size: 12px;
+  line-height: 1;
+  padding: 1px 6px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.mkt-add-btn:hover { border-color: var(--col-amber); }
+.mkt-custom-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.mkt-chip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  color: var(--col-amber);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.mkt-chip-remove {
+  background: none;
+  border: none;
+  color: var(--col-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  line-height: 1;
+}
+.mkt-chip-remove:hover { color: var(--col-red); }
+.mkt-overview-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  flex: 1;
+}
+
+.mkt-card {
+  flex: 1;
+  min-width: 160px;
+  padding: 10px 14px;
+  border-right: 1px solid var(--col-border);
+  cursor: pointer;
+  transition: background 0.12s;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.mkt-card:last-child { border-right: none; }
+.mkt-card:hover { background: #141414; }
+
+.mkt-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mkt-card-name {
+  color: var(--col-cyan);
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.mkt-card-price {
+  color: var(--col-body);
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 1px;
+  letter-spacing: -0.5px;
+}
+
+.mkt-card-change {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* ─── Ticker Info Widget ────────────────────────────────────── */
+.ti-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  height: 100%;
+}
+
+.ti-chart-col { flex: none; }
+
+.ti-metrics-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ti-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ti-price {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--col-body);
+  letter-spacing: -1px;
+}
+
+.ti-change {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ti-vol-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.ti-vol-label {
+  color: var(--col-dim);
+  font-size: 10px;
+}
+
+.ti-vol-val {
+  color: var(--col-body);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.ti-tags-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.ti-tag {
+  color: var(--col-dim);
+  font-size: 10px;
+}
+
+.ti-tag-sep {
+  color: var(--col-border);
+  font-size: 10px;
+}
+
+/* ─── Ticker Profile Widget ─────────────────────────────────── */
+.prof-wrap {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  overflow: auto;
+}
+
+.prof-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--col-border);
+}
+
+.prof-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--col-body);
+}
+
+.prof-sector {
+  font-size: 11px;
+  color: var(--col-cyan);
+  font-weight: 500;
+}
+
+.prof-meta {
+  font-size: 10px;
+  color: var(--col-dim);
+}
+
+.prof-website {
+  font-size: 10px;
+  color: var(--col-cyan);
+  text-decoration: none;
+}
+
+.prof-website:hover { text-decoration: underline; }
+
+.prof-desc-wrap {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--col-border);
+}
+
+.prof-desc-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--col-body);
+  margin-bottom: 6px;
+}
+
+.prof-desc {
+  font-size: 10px;
+  color: var(--col-dim);
+  line-height: 1.6;
+}
+
+.prof-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #141414;
+}
+
+.prof-section-title {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--col-amber);
+  opacity: 0.8;
+  margin-bottom: 4px;
+}
+
+.prof-kv {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 2px 0;
+  gap: 8px;
+}
+
+.prof-key {
+  color: var(--col-dim);
+  font-size: 10px;
+  min-width: 100px;
+}
+
+.prof-val {
+  color: var(--col-body);
+  font-size: 10px;
+  font-weight: 500;
+  text-align: right;
+}
+
+/* ─── Regime Widget ─────────────────────────────────────────── */
+.regime-widget-wrap {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  overflow: auto;
+}
+
+.regime-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--col-border);
+}
+
+.regime-risk {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  flex: none;
+}
+
+.regime-meta { flex: 1; }
+
+.regime-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--col-amber);
+}
+
+.regime-scale {
+  font-size: 10px;
+  color: var(--col-dim);
+  margin-top: 2px;
+}
+
+.regime-refresh {
+  background: transparent;
+  border: none;
+  color: var(--col-dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  flex: none;
+}
+.regime-refresh:hover { color: var(--col-amber); }
+
+.regime-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--col-border);
+}
+
+.regime-layer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.regime-layer-label {
+  color: var(--col-dim);
+  min-width: 56px;
+}
+
+.regime-bar-track {
+  flex: 1;
+  height: 6px;
+  background: #1e1e1e;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 0 6px;
+}
+.regime-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.regime-layer-num {
+  min-width: 24px;
+  text-align: right;
+  font-size: 10px;
+}
+
+/* ─── Macro Widget ──────────────────────────────────────────── */
+.macro-widget-wrap {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  overflow: auto;
+}
+
+.macro-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--col-border);
+  flex-wrap: wrap;
+}
+
+.macro-risk-num {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -1px;
+}
+
+.macro-regime-lbl {
+  font-size: 10px;
+  color: var(--col-amber);
+  margin-left: 6px;
+}
+
+.macro-cycle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.macro-advice {
+  font-size: 10px;
+  color: var(--col-dim);
+  font-style: italic;
+  max-width: 160px;
+}
+
+.macro-cuau {
+  font-size: 10px;
+  color: var(--col-dim);
+  margin-left: auto;
+}
+
+.macro-adj-header {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--col-amber);
+  opacity: 0.8;
+  margin-top: 4px;
+}
+
+.macro-adj-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.macro-adj-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.macro-adj-sector {
+  color: var(--col-body);
+  min-width: 80px;
+}
+.macro-bar-track {
+  flex: 1;
+  height: 5px;
+  background: #1e1e1e;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.macro-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+/* ─── Sectors Widget ────────────────────────────────────────── */
+.sectors-widget-wrap {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  overflow: auto;
+}
+
+.sectors-universe {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--col-amber);
+  letter-spacing: 1px;
+  opacity: 0.8;
+}
+
+.sectors-top-avoid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--col-border);
+}
+
+.sectors-lbl {
+  color: var(--col-dim);
+  font-size: 10px;
+}
+
+/* ─── News Widget ───────────────────────────────────────────── */
+.news-widget-wrap {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+
+.news-item {
+  display: flex;
+  gap: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid #141414;
+  transition: background 0.1s;
+}
+
+.news-item:hover { background: #141414; }
+
+.news-accent {
+  width: 3px;
+  flex-shrink: 0;
+  border-radius: 0;
+  align-self: stretch;
+  margin-right: 10px;
+}
+
+.news-content { flex: 1; min-width: 0; }
+
+.news-headline {
+  font-size: 11px;
+  color: var(--col-body);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+
+.news-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 10px;
+  color: var(--col-dim);
+}
+
+.news-sentiment {
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
+.news-source { color: var(--col-dim); }
+.news-time   { color: var(--col-dim); }
+
+/* ─── Rankings Widget ───────────────────────────────────────── */
+.rw-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.rw-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--col-border);
+  background: var(--col-elevated);
+  flex-wrap: wrap;
+}
+
+.rw-col-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  background: var(--col-surface);
+  border-bottom: 1px solid var(--col-amber);
+  padding: 0 4px;
+}
+
+.rw-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--col-border) transparent;
+}
+
+.rw-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px;
+}
+
+.rw-footer {
+  flex: none;
+  padding: 3px 10px;
+  background: var(--col-surface);
+  border-top: 1px solid var(--col-border);
+  color: var(--col-dim);
+  font-size: 10px;
+}
+
+/* ─── Shared colour utilities ───────────────────────────────── */
+.col-green  { color: var(--col-green); }
+.col-red    { color: var(--col-red); }
+.col-amber  { color: var(--col-amber); }
+.col-dim    { color: var(--col-dim); }
+.col-cyan   { color: var(--col-cyan); }
+
 /* Scrollbars */
 ::-webkit-scrollbar {
   width: 4px;

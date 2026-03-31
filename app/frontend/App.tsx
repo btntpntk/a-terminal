@@ -8,6 +8,9 @@ import { SectorPanel } from './components/panels/SectorPanel';
 import { NewsPanel } from './components/panels/NewsPanel';
 import { RankingsTable } from './components/rankings/RankingsTable';
 import { ScanProgressOverlay } from './components/scan/ScanProgressOverlay';
+import { TabBar } from './components/tabs/TabBar';
+import { TabCanvas } from './components/tabs/TabCanvas';
+import { WidgetPicker } from './components/tabs/WidgetPicker';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,6 +21,8 @@ const queryClient = new QueryClient({
   },
 });
 
+type ViewMode = 'dashboard' | 'tabs';
+
 const MIN_COL  = 180;
 const MAX_COL  = 600;
 const MIN_ROW  = 120;
@@ -27,7 +32,7 @@ function saved(key: string, fallback: number) {
   return v !== null ? Number(v) : fallback;
 }
 
-function Dashboard() {
+function ClassicDashboard() {
   const [leftWidth,    setLeftWidth]    = useState(() => saved('panel.leftWidth',    320));
   const [sectorHeight, setSectorHeight] = useState(() => saved('panel.sectorHeight', 300));
   const [sectorWidth,  setSectorWidth]  = useState(() => saved('panel.sectorWidth',  260));
@@ -84,44 +89,71 @@ function Dashboard() {
   }, [sectorWidth]);
 
   return (
+    <div className="main-layout">
+      {/* Left panel */}
+      <aside className="left-panel" style={{ width: leftWidth, minWidth: leftWidth }}>
+        <RegimePanel />
+        <div className="panel-divider" />
+        <MacroPanel />
+      </aside>
+
+      {/* Left resize handle */}
+      <div className="resize-handle" onMouseDown={onMouseDownCol} />
+
+      {/* Right side */}
+      <main className="center-panel" style={{ flexDirection: 'column' }}>
+        {/* Top row */}
+        <div style={{ height: sectorHeight, minHeight: sectorHeight, flexShrink: 0, display: 'flex', overflow: 'hidden' }}>
+          <div style={{ width: sectorWidth, minWidth: sectorWidth, overflow: 'auto', borderRight: 'none', flexShrink: 0 }}>
+            <SectorPanel />
+          </div>
+          <div className="resize-handle" onMouseDown={onMouseDownSectorW} />
+          <div style={{ flex: 1, minWidth: 0, overflow: 'auto', borderLeft: '1px solid var(--col-border)' }}>
+            <NewsPanel />
+          </div>
+        </div>
+        <div className="resize-handle-h" onMouseDown={onMouseDownRow} />
+        {/* Rankings */}
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <RankingsTable />
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function Dashboard() {
+  const [view, setView] = useState<ViewMode>(() => {
+    return (localStorage.getItem('alphas.viewMode') as ViewMode) ?? 'dashboard';
+  });
+
+  const toggleView = useCallback(() => {
+    setView(v => {
+      const next = v === 'dashboard' ? 'tabs' : 'dashboard';
+      localStorage.setItem('alphas.viewMode', next);
+      return next;
+    });
+  }, []);
+
+  return (
     <div className="app-shell">
-      <Topbar />
-
-      <div className="main-layout">
-        {/* Left panel */}
-        <aside className="left-panel" style={{ width: leftWidth, minWidth: leftWidth }}>
-          <RegimePanel />
-          <div className="panel-divider" />
-          <MacroPanel />
-        </aside>
-
-        {/* Left resize handle */}
-        <div className="resize-handle" onMouseDown={onMouseDownCol} />
-
-        {/* Right side — top row: Sector | News; bottom: Rankings */}
-        <main className="center-panel" style={{ flexDirection: 'column' }}>
-
-          {/* Top row */}
-          <div style={{ height: sectorHeight, minHeight: sectorHeight, flexShrink: 0, display: 'flex', overflow: 'hidden' }}>
-            <div style={{ width: sectorWidth, minWidth: sectorWidth, overflow: 'auto', borderRight: 'none', flexShrink: 0 }}>
-              <SectorPanel />
-            </div>
-
-            <div className="resize-handle" onMouseDown={onMouseDownSectorW} />
-
-            <div style={{ flex: 1, minWidth: 0, overflow: 'auto', borderLeft: '1px solid var(--col-border)' }}>
-              <NewsPanel />
-            </div>
-          </div>
-
-          <div className="resize-handle-h" onMouseDown={onMouseDownRow} />
-
-          {/* Rankings */}
-          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <RankingsTable />
-          </div>
-        </main>
+      <div className="topbar-with-viewtoggle">
+        <Topbar />
+        {/* Widget picker — always visible, switches to tabs view automatically */}
+        <WidgetPicker onWidgetAdded={() => setView('tabs')} />
+        <button className="view-toggle-btn" onClick={toggleView} title="Switch view">
+          {view === 'dashboard' ? '⊞ WIDGETS' : '≡ DASHBOARD'}
+        </button>
       </div>
+
+      {view === 'dashboard' ? (
+        <ClassicDashboard />
+      ) : (
+        <div className="tab-system-root">
+          <TabBar />
+          <TabCanvas />
+        </div>
+      )}
 
       <Statusbar />
       <ScanProgressOverlay />

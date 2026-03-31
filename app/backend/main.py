@@ -564,6 +564,214 @@ async def get_price_history(ticker: str, period: str = Query("3mo")):
 
 
 # ─────────────────────────────────────────────────────────────
+# ROUTES — MARKET OVERVIEW
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/api/market-overview", tags=["Market"])
+async def get_market_overview():
+    """
+    Return price, change%, and 30-day sparkline for key indices:
+    SET (^SET.BK), S&P 500 (^GSPC), Gold (GC=F), Crude Oil (CL=F).
+    Cached for 5 minutes.
+    """
+    cache_key = "market_overview"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    import yfinance as yf
+
+    INSTRUMENTS = [
+        {"id": "SET",       "name": "SET Index",  "ticker": "^SET.BK"},
+        {"id": "SP500",     "name": "S&P 500",    "ticker": "^GSPC"},
+        {"id": "GOLD",      "name": "Gold",       "ticker": "GC=F"},
+        {"id": "CRUDE",     "name": "Crude Oil",  "ticker": "CL=F"},
+    ]
+
+    def _fetch():
+        rows = []
+        for inst in INSTRUMENTS:
+            try:
+                tk = yf.Ticker(inst["ticker"])
+                df = tk.history(period="35d", interval="1d", auto_adjust=True)
+                if df.empty or len(df) < 2:
+                    rows.append({**inst, "price": None, "change": None, "change_pct": None, "sparkline": []})
+                    continue
+                closes = df["Close"].dropna().tolist()
+                price  = closes[-1]
+                prev   = closes[-2]
+                change     = price - prev
+                change_pct = (change / prev * 100) if prev else 0.0
+                sparkline  = [round(v, 4) for v in closes[-30:]]
+                rows.append({
+                    **inst,
+                    "price":      round(price, 4),
+                    "change":     round(change, 4),
+                    "change_pct": round(change_pct, 4),
+                    "sparkline":  sparkline,
+                })
+            except Exception as e:
+                rows.append({**inst, "price": None, "change": None, "change_pct": None, "sparkline": [], "error": str(e)})
+        return {"instruments": _clean_floats(rows)}
+
+    result = await asyncio.to_thread(_fetch)
+    cache.set(cache_key, result, ttl_seconds=300)
+    return result
+
+
+# ─────────────────────────────────────────────────────────────
+# ROUTES — WATCHLIST
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/api/watchlist", tags=["Market"])
+async def get_watchlist(tickers: str = Query(..., description="Comma-separated tickers, e.g. AAPL,MSFT")):
+    """
+    Return last price and day/week/month/year % change for a list of tickers.
+    Cached for 5 minutes per unique ticker set.
+    """
+    ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    if not ticker_list:
+        raise HTTPException(status_code=400, detail="No tickers provided.")
+
+    cache_key = f"watchlist_{','.join(sorted(ticker_list))}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    import yfinance as yf
+
+    def _fetch():
+        rows = []
+        for ticker in ticker_list:
+            try:
+                df = yf.download(ticker, period="13mo", interval="1d",
+                                 auto_adjust=True, progress=False, multi_level_index=False)
+                if df.empty:
+                    rows.append({"ticker": ticker, "price": None, "day_pct": None, "week_pct": None, "month_pct": None, "year_pct": None})
+                    continue
+                closes = df["Close"].dropna()
+                price = float(closes.iloc[-1])
+
+                def _pct(n):
+                    if len(closes) > n:
+                        ref = float(closes.iloc[-(n+1)])
+                        return round((price - ref) / ref * 100, 2) if ref else None
+                    return None
+
+                rows.append({
+                    "ticker":     ticker,
+                    "price":      round(price, 4),
+                    "day_pct":    _pct(1),
+                    "week_pct":   _pct(5),
+                    "month_pct":  _pct(21),
+                    "year_pct":   _pct(252),
+                })
+            except Exception as e:
+                rows.append({"ticker": ticker, "price": None, "day_pct": None, "week_pct": None, "month_pct": None, "year_pct": None, "error": str(e)})
+        return {"rows": _clean_floats(rows)}
+
+    result = await asyncio.to_thread(_fetch)
+    cache.set(cache_key, result, ttl_seconds=300)
+    return result
+
+
+# ─────────────────────────────────────────────────────────────
+# ROUTES — TICKER PROFILE
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/api/ticker/profile/{ticker}", tags=["Ticker"])
+async def get_ticker_profile(ticker: str):
+    """
+    Return cleaned yfinance .info dict for a ticker.
+    Cached for 1 hour.
+    """
+    cache_key = f"profile_{ticker}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    import yfinance as yf
+
+    def _fetch():
+        tk   = yf.Ticker(ticker)
+        info = dict(tk.info)
+        KEEP = [
+            "shortName", "longName", "symbol", "exchange", "quoteType",
+            "sector", "industry", "country", "currency", "website",
+            "longBusinessSummary",
+            "marketCap", "enterpriseValue", "trailingPE", "forwardPE",
+            "priceToBook", "priceToSalesTrailing12Months",
+            "profitMargins", "operatingMargins", "grossMargins",
+            "returnOnEquity", "returnOnAssets",
+            "totalRevenue", "revenueGrowth", "earningsGrowth",
+            "totalDebt", "debtToEquity", "currentRatio", "quickRatio",
+            "freeCashflow", "operatingCashflow",
+            "dividendYield", "payoutRatio",
+            "beta", "52WeekChange", "fiftyTwoWeekHigh", "fiftyTwoWeekLow",
+            "averageVolume", "averageVolume10days",
+            "fullTimeEmployees", "auditRisk", "boardRisk", "compensationRisk",
+            "sharesOutstanding", "floatShares", "heldPercentInsiders", "heldPercentInstitutions",
+            "shortRatio", "shortPercentOfFloat",
+            "recommendationKey", "numberOfAnalystOpinions",
+            "targetMeanPrice", "targetHighPrice", "targetLowPrice",
+        ]
+        cleaned = {k: info[k] for k in KEEP if k in info}
+        return _clean_floats({"ticker": ticker, "profile": cleaned})
+
+    result = await asyncio.to_thread(_fetch)
+    cache.set(cache_key, result, ttl_seconds=3600)
+    return result
+
+
+# ─────────────────────────────────────────────────────────────
+# ROUTES — TICKER INFO (summary metrics + sparkline)
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/api/ticker/info/{ticker}", tags=["Ticker"])
+async def get_ticker_info(ticker: str):
+    """
+    Return summary metrics and a 14-day close sparkline for a ticker.
+    Cached for 5 minutes.
+    """
+    cache_key = f"ticker_info_{ticker}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    import yfinance as yf
+
+    def _fetch():
+        tk   = yf.Ticker(ticker)
+        info = dict(tk.info)
+        df   = tk.history(period="20d", interval="1d", auto_adjust=True)
+
+        closes = df["Close"].dropna().tolist() if not df.empty else []
+        price  = closes[-1]  if closes else None
+        prev   = closes[-2]  if len(closes) >= 2 else None
+        change     = (price - prev) if price and prev else None
+        change_pct = (change / prev * 100) if change and prev else None
+
+        return _clean_floats({
+            "ticker":      ticker,
+            "price":       round(price, 4) if price else None,
+            "change":      round(change, 4) if change else None,
+            "change_pct":  round(change_pct, 4) if change_pct else None,
+            "volume":      info.get("regularMarketVolume") or info.get("averageVolume"),
+            "avg_volume":  info.get("averageVolume"),
+            "market_cap":  info.get("marketCap"),
+            "sector":      info.get("sector"),
+            "industry":    info.get("industry"),
+            "country":     info.get("country"),
+            "currency":    info.get("currency"),
+            "sparkline":   [round(v, 4) for v in closes[-14:]],
+        })
+
+    result = await asyncio.to_thread(_fetch)
+    cache.set(cache_key, result, ttl_seconds=300)
+    return result
+
+
+# ─────────────────────────────────────────────────────────────
 # ROUTES — ADMIN
 # ─────────────────────────────────────────────────────────────
 

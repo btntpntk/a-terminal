@@ -29,4 +29,38 @@ export const api = {
     ),
   cacheStats: () => apiFetch<{ keys: number }>('/api/cache/stats'),
   clearCache: () => apiFetch<void>('/api/cache', { method: 'DELETE' }),
+
+  // ── Widget data ──────────────────────────────────────────
+  marketOverview: () =>
+    apiFetch<{
+      instruments: Array<{
+        id: string; name: string; ticker: string;
+        price: number | null; change: number | null;
+        change_pct: number | null; sparkline: number[];
+      }>;
+    }>('/api/market-overview'),
+
+  watchlist: (tickers: string[]) =>
+    apiFetch<{
+      rows: Array<{
+        ticker: string; price: number | null;
+        day_pct: number | null; week_pct: number | null;
+        month_pct: number | null; year_pct: number | null;
+      }>;
+    }>(`/api/watchlist?tickers=${encodeURIComponent(tickers.join(','))}`),
+
+  tickerProfile: (ticker: string) =>
+    apiFetch<{ ticker: string; profile: Record<string, unknown> }>(
+      `/api/ticker/profile/${encodeURIComponent(ticker)}`
+    ),
+
+  tickerInfo: (ticker: string) =>
+    apiFetch<{
+      ticker: string; price: number | null; change: number | null;
+      change_pct: number | null; volume: number | null;
+      avg_volume: number | null; market_cap: number | null;
+      sector: string | null; industry: string | null;
+      country: string | null; currency: string | null;
+      sparkline: number[];
+    }>(`/api/ticker/info/${encodeURIComponent(ticker)}`),
 };

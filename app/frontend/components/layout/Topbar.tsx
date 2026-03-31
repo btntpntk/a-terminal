@@ -14,8 +14,19 @@ export function Topbar() {
   useEffect(() => {
     const tick = () => {
       const now = new Date();
-      setClock(now.toUTCString().slice(17, 25) + ' UTC');
+      
+      // Format the time specifically for Bangkok (Asia/Bangkok)
+      const bangkokTime = now.toLocaleTimeString('en-GB', {
+        timeZone: 'Asia/Bangkok',
+        hour12: false, // Set to true if you prefer 12-hour format
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+
+      setClock(bangkokTime + ' BKK');
     };
+
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);

@@ -1,0 +1,143 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import type { LayoutItem } from 'react-grid-layout';
+import type { Tab, WidgetConfig, WidgetType } from '../types/tab';
+
+// ─── Default layout helpers ──────────────────────────────────
+
+let _widgetCounter = 0;
+function genId() {
+  return `w-${Date.now()}-${_widgetCounter++}`;
+}
+
+const DEFAULT_WIDGET_SIZES: Record<WidgetType, { w: number; h: number }> = {
+  'market-overview':  { w: 12, h: 5 },
+  'watchlist':        { w: 4,  h: 9 },
+  'ticker-info':      { w: 5,  h: 5 },
+  'historical-price': { w: 6,  h: 9 },
+  'price-target':     { w: 8,  h: 10 },
+  'ticker-profile':   { w: 4,  h: 12 },
+  'regime':           { w: 4,  h: 11 },
+  'macro':            { w: 6,  h: 11 },
+  'sectors':          { w: 4,  h: 10 },
+  'news':             { w: 4,  h: 8  },
+  'rankings':         { w: 12, h: 12 },
+};
+
+function defaultTab(name: string, ticker = 'AAPL'): Tab {
+  const w1 = genId();
+  const w2 = genId();
+  const w3 = genId();
+  const w4 = genId();
+  return {
+    id:           `tab-${Date.now()}`,
+    name,
+    activeTicker: ticker,
+    widgets: [
+      { id: w1, type: 'market-overview' },
+      { id: w2, type: 'ticker-info' },
+      { id: w3, type: 'watchlist' },
+      { id: w4, type: 'price-target' },
+    ],
+    layout: [
+      { i: w1, x: 0, y: 0, w: 4, h: 9  },
+      { i: w2, x: 4, y: 0, w: 4, h: 5  },
+      { i: w3, x: 8, y: 0, w: 4, h: 9  },
+      { i: w4, x: 0, y: 9, w: 8, h: 10 },
+    ],
+  };
+}
+
+// ─── Store ───────────────────────────────────────────────────
+
+interface TabStore {
+  tabs: Tab[];
+  activeTabId: string;
+
+  addTab: () => void;
+  removeTab: (tabId: string) => void;
+  renameTab: (tabId: string, name: string) => void;
+  setActiveTab: (tabId: string) => void;
+  setActiveTicker: (tabId: string, ticker: string) => void;
+  setLayout: (tabId: string, layout: LayoutItem[]) => void;
+  addWidget: (tabId: string, type: WidgetType) => void;
+  removeWidget: (tabId: string, widgetId: string) => void;
+}
+
+const initialTab = defaultTab('Tab 1', 'AAPL');
+
+export const useTabStore = create<TabStore>()(
+  persist(
+    (set, get) => ({
+      tabs:        [initialTab],
+      activeTabId: initialTab.id,
+
+      addTab: () => {
+        const { tabs } = get();
+        const tab = defaultTab(`Tab ${tabs.length + 1}`);
+        set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id }));
+      },
+
+      removeTab: (tabId) => {
+        const { tabs, activeTabId } = get();
+        if (tabs.length === 1) return;
+        const idx    = tabs.findIndex(t => t.id === tabId);
+        const next   = tabs.filter(t => t.id !== tabId);
+        const nextId = activeTabId === tabId
+          ? (next[Math.max(0, idx - 1)]?.id ?? next[0].id)
+          : activeTabId;
+        set({ tabs: next, activeTabId: nextId });
+      },
+
+      renameTab: (tabId, name) =>
+        set(s => ({
+          tabs: s.tabs.map(t => t.id === tabId ? { ...t, name } : t),
+        })),
+
+      setActiveTab: (tabId) => set({ activeTabId: tabId }),
+
+      setActiveTicker: (tabId, ticker) =>
+        set(s => ({
+          tabs: s.tabs.map(t =>
+            t.id === tabId ? { ...t, activeTicker: ticker.toUpperCase() } : t,
+          ),
+        })),
+
+      setLayout: (tabId, layout) =>
+        set(s => ({
+          tabs: s.tabs.map(t => t.id === tabId ? { ...t, layout } : t),
+        })),
+
+      addWidget: (tabId, type) => {
+        const id        = genId();
+        const size      = DEFAULT_WIDGET_SIZES[type];
+        const cfg: WidgetConfig  = { id, type };
+        const item: LayoutItem   = { i: id, x: 0, y: Infinity, ...size };
+        set(s => ({
+          tabs: s.tabs.map(t =>
+            t.id === tabId
+              ? { ...t, widgets: [...t.widgets, cfg], layout: [...t.layout, item] }
+              : t,
+          ),
+        }));
+      },
+
+      removeWidget: (tabId, widgetId) =>
+        set(s => ({
+          tabs: s.tabs.map(t =>
+            t.id === tabId
+              ? {
+                  ...t,
+                  widgets: t.widgets.filter(w => w.id !== widgetId),
+                  layout:  t.layout.filter(l => l.i !== widgetId),
+                }
+              : t,
+          ),
+        })),
+    }),
+    {
+      name: 'alphas-tabs',
+      partialize: (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId }),
+    },
+  ),
+);
