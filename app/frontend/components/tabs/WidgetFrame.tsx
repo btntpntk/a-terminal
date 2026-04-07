@@ -17,6 +17,7 @@ import { MacroWidget }           from '../widgets/MacroWidget';
 import { SectorsWidget }         from '../widgets/SectorsWidget';
 import { NewsWidget }            from '../widgets/NewsWidget';
 import { RankingsWidget }        from '../widgets/RankingsWidget';
+import { BacktestWidget }        from '../widgets/BacktestWidget';
 
 // ── Widgets that use the tab's activeTicker in their header ──
 const TICKER_WIDGETS = new Set<WidgetType>([
@@ -35,6 +36,7 @@ const WIDGET_LABELS: Record<WidgetType, string> = {
   'sectors':          'SECTORS',
   'news':             'MARKET NEWS',
   'rankings':         'RANKINGS',
+  'backtest':         'WALK-FORWARD BACKTEST',
 };
 
 interface Props {
@@ -55,6 +57,7 @@ function WidgetBody({ widget, tabId }: Props) {
     case 'sectors':          return <SectorsWidget         tabId={tabId} />;
     case 'news':             return <NewsWidget            tabId={tabId} />;
     case 'rankings':         return <RankingsWidget        tabId={tabId} />;
+    case 'backtest':         return <BacktestWidget        tabId={tabId} />;
     default:                 return null;
   }
 }

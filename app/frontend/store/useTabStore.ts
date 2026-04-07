@@ -22,8 +22,10 @@ const DEFAULT_WIDGET_SIZES: Record<WidgetType, { w: number; h: number }> = {
   'sectors':          { w: 4,  h: 10 },
   'news':             { w: 4,  h: 8  },
   'rankings':         { w: 12, h: 12 },
+  'backtest':         { w: 10, h: 14 },
 };
 
+/** Used by addTab() when the user clicks "+". */
 function defaultTab(name: string, ticker = 'AAPL'): Tab {
   const w1 = genId();
   const w2 = genId();
@@ -48,6 +50,99 @@ function defaultTab(name: string, ticker = 'AAPL'): Tab {
   };
 }
 
+// ─── Preset tabs (loaded on first run / after version reset) ─
+
+function makeOverviewTab(): Tab {
+  const wOverview = genId();
+  const wNews     = genId();
+  const wRegime   = genId();
+  const wMacro    = genId();
+  return {
+    id:           'preset-overview',
+    name:         'Overview',
+    activeTicker: 'AAPL',
+    widgets: [
+      { id: wOverview, type: 'market-overview' },
+      { id: wNews,     type: 'news'            },
+      { id: wRegime,   type: 'regime'          },
+      { id: wMacro,    type: 'macro'           },
+    ],
+    layout: [
+      { i: wOverview, x: 0, y: 0,  w: 8, h: 4  },
+      { i: wNews,     x: 8, y: 0,  w: 4, h: 13 },
+      { i: wRegime,   x: 0, y: 4,  w: 4, h: 9  },
+      { i: wMacro,    x: 4, y: 4,  w: 4, h: 9  },
+    ],
+  };
+}
+
+function makeQuoteTab(): Tab {
+  const wInfo    = genId();
+  const wProfile = genId();
+  const wSectors = genId();
+  const wChart   = genId();
+  const wWatch   = genId();
+  return {
+    id:           'preset-quote',
+    name:         'Quote',
+    activeTicker: 'TISCO.BK',
+    widgets: [
+      { id: wInfo,    type: 'ticker-info'    },
+      { id: wProfile, type: 'ticker-profile' },
+      { id: wSectors, type: 'sectors'        },
+      { id: wChart,   type: 'price-target'   },
+      { id: wWatch,   type: 'watchlist'      },
+    ],
+    layout: [
+      { i: wInfo,    x: 0, y: 0,  w: 3, h: 5  },
+      { i: wProfile, x: 3, y: 0,  w: 5, h: 5  },
+      { i: wSectors, x: 8, y: 0,  w: 4, h: 5  },
+      { i: wChart,   x: 0, y: 5,  w: 8, h: 10 },
+      { i: wWatch,   x: 8, y: 5,  w: 4, h: 10 },
+    ],
+  };
+}
+
+function makeRankingTab(): Tab {
+  const wRank = genId();
+  return {
+    id:           'preset-ranking',
+    name:         'Ranking',
+    activeTicker: 'AAPL',
+    widgets: [
+      { id: wRank, type: 'rankings' },
+    ],
+    layout: [
+      { i: wRank, x: 0, y: 0, w: 12, h: 12 },
+    ],
+  };
+}
+
+function makeBacktestTab(): Tab {
+  const wBt1 = genId();
+  const wBt2 = genId();
+  return {
+    id:           'preset-backtest',
+    name:         'Backtest',
+    activeTicker: 'AAPL',
+    widgets: [
+      { id: wBt1, type: 'backtest' },
+      { id: wBt2, type: 'backtest' },
+    ],
+    layout: [
+      { i: wBt1, x: 0, y: 0, w: 6, h: 14 },
+      { i: wBt2, x: 6, y: 0, w: 6, h: 14 },
+    ],
+  };
+}
+
+const INITIAL_TABS: Tab[] = [
+  makeOverviewTab(),
+  makeQuoteTab(),
+  makeRankingTab(),
+  makeBacktestTab(),
+];
+
 // ─── Store ───────────────────────────────────────────────────
 
 interface TabStore {
@@ -64,13 +159,11 @@ interface TabStore {
   removeWidget: (tabId: string, widgetId: string) => void;
 }
 
-const initialTab = defaultTab('Tab 1', 'AAPL');
-
 export const useTabStore = create<TabStore>()(
   persist(
     (set, get) => ({
-      tabs:        [initialTab],
-      activeTabId: initialTab.id,
+      tabs:        INITIAL_TABS,
+      activeTabId: INITIAL_TABS[0].id,
 
       addTab: () => {
         const { tabs } = get();
@@ -136,7 +229,12 @@ export const useTabStore = create<TabStore>()(
         })),
     }),
     {
-      name: 'alphas-tabs',
+      name:    'alphas-tabs',
+      version: 2,
+      migrate: (_state, _fromVersion) => ({
+        tabs:        INITIAL_TABS,
+        activeTabId: INITIAL_TABS[0].id,
+      }),
       partialize: (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId }),
     },
   ),

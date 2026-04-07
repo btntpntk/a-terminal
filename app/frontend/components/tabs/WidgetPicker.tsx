@@ -24,6 +24,8 @@ const WIDGET_OPTIONS: WidgetOption[] = [
   // Lists
   { group: 'LISTS',      type: 'watchlist',         label: 'Watchlist',          desc: 'Custom tickers — day/week/month/year %' },
   { group: 'LISTS',      type: 'rankings',          label: 'Rankings',           desc: 'Full alpha scan table with RUN SCAN control' },
+  // Backtesting
+  { group: 'ANALYSIS',   type: 'backtest',          label: 'Walk-Forward Backtest', desc: 'Equity curve vs benchmark, KPIs, walk-forward folds' },
 ];
 
 interface Props {

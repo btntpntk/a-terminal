@@ -63,4 +63,10 @@ export const api = {
       country: string | null; currency: string | null;
       sparkline: number[];
     }>(`/api/ticker/info/${encodeURIComponent(ticker)}`),
+
+  runBacktest: (req: import('../types/api').BacktestRequest) =>
+    apiFetch<import('../types/api').BacktestResponse>('/api/backtest/run', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
 };

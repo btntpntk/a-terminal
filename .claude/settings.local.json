@@ -1,7 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(python -c \"import scipy; print\\(scipy.__version__\\)\")",
+      "Bash(python -c ':*)",
+      "Bash(npx tsc:*)",
+      "Bash(python -c \"import questionary; print\\(questionary.__version__\\)\")",
+      "Bash(poetry add:*)",
+      "Bash(Get-Content \"C:\\\\Users\\\\TRNTTI\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-TRNTTI-Documents-alphas\\\\bac7ce50-3f20-41ee-a187-9eb6607bcd71\\\\tasks\\\\b6va89ldb.output\")",
+      "Bash(python -c \"from scipy.optimize import minimize; print\\('scipy OK'\\)\")",
+      "Bash(poetry run:*)",
+      "Bash(poetry env:*)",
+      "Bash(\"C:\\\\Users\\\\TRNTTI\\\\AppData\\\\Local\\\\pypoetry\\\\Cache\\\\virtualenvs\\\\ai-hedge-fund-MvdIjt0C-py3.11\\\\Scripts\\\\pip.exe\" install:*)",
+      "Bash('C:\\\\Users\\\\TRNTTI\\\\AppData\\\\Local\\\\pypoetry\\\\Cache\\\\virtualenvs\\\\ai-hedge-fund-MvdIjt0C-py3.11\\\\Scripts\\\\python.exe' -c ':*)"
     ]
   }
 }

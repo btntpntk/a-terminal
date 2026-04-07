@@ -183,3 +183,40 @@ export interface UniverseInfo {
   sector_count: number;
   benchmark: string;
 }
+
+// Backtesting
+export interface BacktestMetrics {
+  total_return:     number | null;
+  cagr:             number | null;
+  sharpe_ratio:     number | null;
+  max_drawdown:     number | null;
+  calmar_ratio:     number | null;
+  volatility_ann:   number | null;
+  avg_trade_return: number | null;
+  win_rate:         number | null;
+  avg_win:          number | null;
+  avg_loss:         number | null;
+  reward_to_risk:   number | null;
+  total_trades:     number;
+  long_trades:      number;
+  short_trades:     number;
+}
+
+export interface BacktestResponse {
+  equity_curve:      Record<string, number>;
+  benchmark_curve:   Record<string, number>;
+  fold_boundaries:   string[];
+  metrics:           BacktestMetrics;
+  trade_log_summary: { total_trades: number; long_trades: number; short_trades: number };
+  /** Sampled daily weights: each entry is {date, ticker: weight, ...}. Positive = long, negative = short. */
+  positions_chart:   Array<Record<string, number | string>>;
+}
+
+export interface BacktestRequest {
+  strategy:          string;
+  universe:          string;
+  optimizer:         string;
+  max_stop_loss_pct: number;
+  initial_capital:   number;
+  period_years:      number;
+}

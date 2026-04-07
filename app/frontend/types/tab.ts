@@ -11,7 +11,8 @@ export type WidgetType =
   | 'macro'
   | 'sectors'
   | 'news'
-  | 'rankings';
+  | 'rankings'
+  | 'backtest';
 
 export interface WidgetConfig {
   id: string;     // matches LayoutItem 'i'

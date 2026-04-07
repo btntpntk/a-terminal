@@ -772,6 +772,120 @@ async def get_ticker_info(ticker: str):
 
 
 # ─────────────────────────────────────────────────────────────
+# ROUTES — BACKTESTING
+# ─────────────────────────────────────────────────────────────
+
+from pydantic import BaseModel as _BaseModel
+
+class BacktestRequest(_BaseModel):
+    strategy:           str   = "MomentumStrategy"
+    universe:           str   = "SP500_SAMPLE"
+    optimizer:          str   = "EqualWeightOptimizer"
+    max_stop_loss_pct:  float = 5.0
+    initial_capital:    float = 1_000_000.0
+    period_years:       int   = 3
+
+
+@app.post("/api/backtest/run", tags=["Backtest"])
+async def run_backtest_endpoint(req: BacktestRequest):
+    """
+    Run a walk-forward backtest.
+    Returns equity_curve, benchmark_curve, fold_boundaries, metrics, and trade_log_summary.
+    """
+    from src.strategies import STRATEGY_MAP
+    from src.universes import UNIVERSE_MAP
+    from src.backtesting.optimizers import OPTIMIZER_MAP
+    from src.backtesting.data_loader import load_prices
+    from src.backtesting.engine import run_backtest
+
+    # Validate inputs
+    if req.strategy not in STRATEGY_MAP:
+        raise HTTPException(status_code=400, detail=f"Unknown strategy '{req.strategy}'. Valid: {list(STRATEGY_MAP)}")
+    if req.optimizer not in OPTIMIZER_MAP:
+        raise HTTPException(status_code=400, detail=f"Unknown optimizer '{req.optimizer}'. Valid: {list(OPTIMIZER_MAP)}")
+    if req.universe not in UNIVERSE_MAP:
+        raise HTTPException(status_code=400, detail=f"Unknown universe '{req.universe}'. Valid: {list(UNIVERSE_MAP)}")
+    if not (1 <= req.period_years <= 15):
+        raise HTTPException(status_code=400, detail="period_years must be between 1 and 15.")
+
+    universe   = UNIVERSE_MAP[req.universe]
+    strategy   = STRATEGY_MAP[req.strategy]()
+    optimizer  = OPTIMIZER_MAP[req.optimizer]()
+
+    def _execute():
+        # Load prices (universe tickers + benchmark)
+        prices = load_prices(
+            tickers=universe.tickers,
+            period_years=req.period_years + 2,   # extra for warm-up
+            extra_tickers=[universe.benchmark_ticker],
+        )
+
+        # Separate benchmark
+        bm_ticker = universe.benchmark_ticker
+        if bm_ticker in prices.columns:
+            benchmark_prices = prices[bm_ticker]
+            asset_prices     = prices[universe.tickers].dropna(how="all")
+        else:
+            # If benchmark not found, use first asset
+            asset_prices     = prices[universe.tickers].dropna(how="all")
+            benchmark_prices = asset_prices.iloc[:, 0]
+
+        result = run_backtest(
+            prices            = asset_prices,
+            benchmark_prices  = benchmark_prices,
+            strategy          = strategy,
+            optimizer         = optimizer,
+            initial_capital   = req.initial_capital,
+            max_stop_loss_pct = req.max_stop_loss_pct / 100.0,
+        )
+        return result
+
+    try:
+        result = await asyncio.to_thread(_execute)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Backtest failed: {e}")
+
+    # Serialize equity curve
+    equity_dict    = {d.strftime("%Y-%m-%d"): round(v, 2) for d, v in result.equity_curve.items() if not math.isnan(v)}
+    benchmark_dict = {d.strftime("%Y-%m-%d"): round(v, 2) for d, v in result.benchmark_curve.items() if not math.isnan(v)}
+
+    # Fold boundaries (first date of each fold's test period)
+    fold_boundaries: list[str] = []
+    for s in result.fold_returns:
+        if len(s) > 0:
+            fold_boundaries.append(s.index[0].strftime("%Y-%m-%d"))
+
+    trade_log_summary = {
+        "total_trades":  result.metrics.get("total_trades", 0),
+        "long_trades":   result.metrics.get("long_trades", 0),
+        "short_trades":  result.metrics.get("short_trades", 0),
+    }
+
+    # Positions chart — sample to ≤150 points, active tickers only
+    wh = result.weights_history
+    sample_step = max(1, len(wh) // 150)
+    wh_sampled  = wh.iloc[::sample_step]
+    # Only tickers that held a non-zero position at some point
+    active_cols = wh_sampled.columns[(wh_sampled.abs() > 1e-4).any()].tolist()
+    positions_chart = []
+    for date, row in wh_sampled[active_cols].iterrows():
+        entry: dict = {"date": date.strftime("%Y-%m-%d")}
+        entry.update({t: round(float(v), 4) for t, v in row.items()})
+        positions_chart.append(entry)
+
+    return _clean_floats({
+        "equity_curve":      equity_dict,
+        "benchmark_curve":   benchmark_dict,
+        "fold_boundaries":   fold_boundaries,
+        "metrics":           result.metrics,
+        "trade_log_summary": trade_log_summary,
+        "positions_chart":   positions_chart,
+    })
+
+
+# ─────────────────────────────────────────────────────────────
 # ROUTES — ADMIN
 # ─────────────────────────────────────────────────────────────
 
