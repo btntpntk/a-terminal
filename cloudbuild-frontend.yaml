@@ -14,4 +14,4 @@ images:
   - asia-southeast1-docker.pkg.dev/alphas-terminal/alphas-terminal-repo/frontend:latest
 
 substitutions:
-  _VITE_API_URL: 'http://localhost:8000'
+  _VITE_API_URL: 'https://alphas-backend-796239460499.asia-southeast1.run.app'
