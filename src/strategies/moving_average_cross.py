@@ -13,7 +13,7 @@ from src.backtesting.interfaces import TradingStrategy
 
 class MovingAverageCrossStrategy(TradingStrategy):
     name = "MA Cross (20/50)"
-    supports_short = True
+    supports_short = False
 
     def __init__(self, fast: int = 20, slow: int = 50):
         self.fast = fast
@@ -24,7 +24,6 @@ class MovingAverageCrossStrategy(TradingStrategy):
         sma_slow = prices.rolling(self.slow, min_periods=self.slow).mean()
 
         signals = pd.DataFrame(0.0, index=prices.index, columns=prices.columns)
-        signals[sma_fast > sma_slow] =  1.0
-        signals[sma_fast < sma_slow] = -1.0
+        signals[sma_fast > sma_slow] = 1.0
 
         return signals.fillna(0.0)

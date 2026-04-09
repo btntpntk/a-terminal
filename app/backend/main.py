@@ -777,13 +777,54 @@ async def get_ticker_info(ticker: str):
 
 from pydantic import BaseModel as _BaseModel
 
+def _infer_benchmark(ticker: str) -> str:
+    """Return an appropriate benchmark ticker for a given asset ticker."""
+    t = ticker.upper()
+    # Crypto (yfinance format: BTC-USD, ETH-USD, etc.)
+    if t.endswith("-USD") or t.endswith("-USDT") or t.endswith("-BTC"):
+        return "BTC-USD"
+    # Thai SET-listed stocks (.BK suffix)
+    if t.endswith(".BK"):
+        return "^SET.BK"
+    # London Stock Exchange
+    if t.endswith(".L"):
+        return "^FTSE"
+    # Tokyo Stock Exchange
+    if t.endswith(".T"):
+        return "^N225"
+    # Australian Securities Exchange
+    if t.endswith(".AX"):
+        return "^AXJO"
+    # Hong Kong
+    if t.endswith(".HK"):
+        return "^HSI"
+    # German XETRA
+    if t.endswith(".DE"):
+        return "^GDAXI"
+    # Toronto Stock Exchange
+    if t.endswith(".TO"):
+        return "^GSPTSE"
+    # Default: S&P 500
+    return "SPY"
+
+
 class BacktestRequest(_BaseModel):
-    strategy:           str   = "MomentumStrategy"
-    universe:           str   = "SP500_SAMPLE"
-    optimizer:          str   = "EqualWeightOptimizer"
-    max_stop_loss_pct:  float = 5.0
-    initial_capital:    float = 1_000_000.0
-    period_years:       int   = 3
+    strategy:           str        = "MomentumStrategy"
+    universe:           str        = "SP500_SAMPLE"
+    optimizer:          str        = "EqualWeightOptimizer"
+    max_stop_loss_pct:  float      = 5.0
+    initial_capital:    float      = 1_000_000.0
+    period_years:       int        = 3
+    # Single-ticker mode: when set, ignores universe/optimizer and tests one asset vs benchmark
+    single_ticker:      str | None = None
+    # Explicit benchmark for single-ticker mode; if omitted, auto-inferred from ticker suffix
+    benchmark_ticker:   str | None = None
+
+
+@app.get("/api/backtest/infer-benchmark", tags=["Backtest"])
+async def infer_benchmark_endpoint(ticker: str):
+    """Return the auto-inferred benchmark ticker for a given asset ticker."""
+    return {"benchmark": _infer_benchmark(ticker.upper().strip())}
 
 
 @app.post("/api/backtest/run", tags=["Backtest"])
@@ -791,6 +832,10 @@ async def run_backtest_endpoint(req: BacktestRequest):
     """
     Run a walk-forward backtest.
     Returns equity_curve, benchmark_curve, fold_boundaries, metrics, and trade_log_summary.
+
+    Modes:
+      - Universe mode (default): run strategy across a multi-asset universe with portfolio optimization.
+      - Single-ticker mode (single_ticker set): run strategy on one asset, full allocation (no optimizer).
     """
     from src.strategies import STRATEGY_MAP
     from src.universes import UNIVERSE_MAP
@@ -798,50 +843,89 @@ async def run_backtest_endpoint(req: BacktestRequest):
     from src.backtesting.data_loader import load_prices
     from src.backtesting.engine import run_backtest
 
-    # Validate inputs
+    # Validate common inputs
     if req.strategy not in STRATEGY_MAP:
         raise HTTPException(status_code=400, detail=f"Unknown strategy '{req.strategy}'. Valid: {list(STRATEGY_MAP)}")
-    if req.optimizer not in OPTIMIZER_MAP:
-        raise HTTPException(status_code=400, detail=f"Unknown optimizer '{req.optimizer}'. Valid: {list(OPTIMIZER_MAP)}")
-    if req.universe not in UNIVERSE_MAP:
-        raise HTTPException(status_code=400, detail=f"Unknown universe '{req.universe}'. Valid: {list(UNIVERSE_MAP)}")
     if not (1 <= req.period_years <= 15):
         raise HTTPException(status_code=400, detail="period_years must be between 1 and 15.")
 
-    universe   = UNIVERSE_MAP[req.universe]
-    strategy   = STRATEGY_MAP[req.strategy]()
-    optimizer  = OPTIMIZER_MAP[req.optimizer]()
+    strategy = STRATEGY_MAP[req.strategy]()
 
-    def _execute():
-        # Load prices (universe tickers + benchmark)
-        prices = load_prices(
-            tickers=universe.tickers,
-            period_years=req.period_years + 2,   # extra for warm-up
-            extra_tickers=[universe.benchmark_ticker],
-        )
+    if req.single_ticker:
+        # ── Single-ticker mode ────────────────────────────────────────────────
+        ticker = req.single_ticker.upper().strip()
+        if not ticker:
+            raise HTTPException(status_code=400, detail="single_ticker cannot be empty.")
 
-        # Separate benchmark
-        bm_ticker = universe.benchmark_ticker
-        if bm_ticker in prices.columns:
-            benchmark_prices = prices[bm_ticker]
-            asset_prices     = prices[universe.tickers].dropna(how="all")
-        else:
-            # If benchmark not found, use first asset
-            asset_prices     = prices[universe.tickers].dropna(how="all")
-            benchmark_prices = asset_prices.iloc[:, 0]
+        bm_ticker = (req.benchmark_ticker.upper().strip() if req.benchmark_ticker else None) or _infer_benchmark(ticker)
 
-        result = run_backtest(
-            prices            = asset_prices,
-            benchmark_prices  = benchmark_prices,
-            strategy          = strategy,
-            optimizer         = optimizer,
-            initial_capital   = req.initial_capital,
-            max_stop_loss_pct = req.max_stop_loss_pct / 100.0,
-        )
-        return result
+        # EqualWeight on one asset = full allocation (signal → weight directly)
+        optimizer = OPTIMIZER_MAP["EqualWeightOptimizer"]()
+
+        def _execute():
+            prices = load_prices(
+                tickers=[ticker],
+                period_years=req.period_years + 2,
+                extra_tickers=[bm_ticker],
+            )
+            if ticker not in prices.columns:
+                raise ValueError(f"No price data found for '{ticker}'.")
+
+            benchmark_prices = prices[bm_ticker] if bm_ticker in prices.columns else prices[ticker]
+            asset_prices     = prices[[ticker]].dropna(how="all")
+
+            bt_result = run_backtest(
+                prices            = asset_prices,
+                benchmark_prices  = benchmark_prices,
+                strategy          = strategy,
+                optimizer         = optimizer,
+                initial_capital   = req.initial_capital,
+                max_stop_loss_pct = req.max_stop_loss_pct / 100.0,
+            )
+            # Buy-and-hold: asset price rebased to initial_capital, aligned to equity_curve dates
+            bh_slice = asset_prices[ticker].reindex(bt_result.equity_curve.index).ffill().dropna()
+            if len(bh_slice) > 0:
+                buyhold_curve = (bh_slice / bh_slice.iloc[0]) * req.initial_capital
+            else:
+                buyhold_curve = bh_slice
+            return bt_result, buyhold_curve
+
+    else:
+        # ── Universe mode ─────────────────────────────────────────────────────
+        if req.optimizer not in OPTIMIZER_MAP:
+            raise HTTPException(status_code=400, detail=f"Unknown optimizer '{req.optimizer}'. Valid: {list(OPTIMIZER_MAP)}")
+        if req.universe not in UNIVERSE_MAP:
+            raise HTTPException(status_code=400, detail=f"Unknown universe '{req.universe}'. Valid: {list(UNIVERSE_MAP)}")
+
+        universe  = UNIVERSE_MAP[req.universe]
+        optimizer = OPTIMIZER_MAP[req.optimizer]()
+
+        def _execute():
+            prices = load_prices(
+                tickers=universe.tickers,
+                period_years=req.period_years + 2,
+                extra_tickers=[universe.benchmark_ticker],
+            )
+            bm_ticker = universe.benchmark_ticker
+            if bm_ticker in prices.columns:
+                benchmark_prices = prices[bm_ticker]
+                asset_prices     = prices[universe.tickers].dropna(how="all")
+            else:
+                asset_prices     = prices[universe.tickers].dropna(how="all")
+                benchmark_prices = asset_prices.iloc[:, 0]
+
+            bt_result = run_backtest(
+                prices            = asset_prices,
+                benchmark_prices  = benchmark_prices,
+                strategy          = strategy,
+                optimizer         = optimizer,
+                initial_capital   = req.initial_capital,
+                max_stop_loss_pct = req.max_stop_loss_pct / 100.0,
+            )
+            return bt_result, None
 
     try:
-        result = await asyncio.to_thread(_execute)
+        result, buyhold_series = await asyncio.to_thread(_execute)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
@@ -850,6 +934,10 @@ async def run_backtest_endpoint(req: BacktestRequest):
     # Serialize equity curve
     equity_dict    = {d.strftime("%Y-%m-%d"): round(v, 2) for d, v in result.equity_curve.items() if not math.isnan(v)}
     benchmark_dict = {d.strftime("%Y-%m-%d"): round(v, 2) for d, v in result.benchmark_curve.items() if not math.isnan(v)}
+    buyhold_dict   = (
+        {d.strftime("%Y-%m-%d"): round(v, 2) for d, v in buyhold_series.items() if not math.isnan(v)}
+        if buyhold_series is not None else None
+    )
 
     # Fold boundaries (first date of each fold's test period)
     fold_boundaries: list[str] = []
@@ -862,6 +950,34 @@ async def run_backtest_endpoint(req: BacktestRequest):
         "long_trades":   result.metrics.get("long_trades", 0),
         "short_trades":  result.metrics.get("short_trades", 0),
     }
+
+    # Trade markers — buy (entry) and sell (exit) dates for chart annotation
+    trade_markers: list[dict] = []
+    if not result.trade_log.empty:
+        for _, row in result.trade_log.iterrows():
+            entry = row.get("entry_date")
+            exit_ = row.get("exit_date")
+            if entry is not None and entry == entry:  # NaN-safe check
+                trade_markers.append({"date": str(entry)[:10], "type": "buy"})
+            if exit_ is not None and exit_ == exit_:
+                stopped = bool(row.get("stop_triggered", False))
+                trade_markers.append({"date": str(exit_)[:10], "type": "stop" if stopped else "sell"})
+
+    # Full trade log for the positions table
+    trade_log_rows: list[dict] = []
+    if not result.trade_log.empty:
+        for _, row in result.trade_log.iterrows():
+            trade_log_rows.append({
+                "asset":          row.get("asset", ""),
+                "entry_date":     str(row.get("entry_date", ""))[:10],
+                "exit_date":      str(row.get("exit_date",  ""))[:10],
+                "entry_price":    round(float(row.get("entry_price",  0) or 0), 4),
+                "exit_price":     round(float(row.get("exit_price",   0) or 0), 4),
+                "return_pct":     round(float(row.get("return_pct",   0) or 0), 6),
+                "pnl":            round(float(row.get("pnl",          0) or 0), 2),
+                "balance":        round(float(row.get("equity_at_exit", 0) or 0), 2),
+                "stop_triggered": bool(row.get("stop_triggered", False)),
+            })
 
     # Positions chart — sample to ≤150 points, active tickers only
     wh = result.weights_history
@@ -878,9 +994,12 @@ async def run_backtest_endpoint(req: BacktestRequest):
     return _clean_floats({
         "equity_curve":      equity_dict,
         "benchmark_curve":   benchmark_dict,
+        "buyhold_curve":     buyhold_dict,
         "fold_boundaries":   fold_boundaries,
         "metrics":           result.metrics,
+        "trade_log":         trade_log_rows,
         "trade_log_summary": trade_log_summary,
+        "trade_markers":     trade_markers,
         "positions_chart":   positions_chart,
     })
 
@@ -964,3 +1083,97 @@ async def debug_financials(ticker: str):
 
     result = await asyncio.to_thread(_fetch)
     return _clean_floats(result)
+
+
+# ─────────────────────────────────────────────────────────────
+# ROUTES — HMM REGIME DETECTOR
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/api/hmm-regime", tags=["HMM"])
+async def get_hmm_regime(
+    ticker:       str  = Query("SPY",        description="Equity ETF to analyze"),
+    start:        str  = Query("2000-01-01", description="Data start date (ISO)"),
+    train_end:    str  = Query("2010-12-31", description="End of initial training window"),
+    test_start:   str  = Query("2011-01-01", description="Start of walk-forward test window"),
+    refresh:      bool = Query(False,         description="Bypass cache"),
+):
+    """
+    HMM market regime detector — expanding-window walk-forward, zero lookahead.
+
+    Returns per-day regime labels (bull/sideways/bear) and posterior probabilities
+    for the full out-of-sample test window.  Cached for 6 hours.
+    """
+    cache_key = f"hmm_regime_{ticker}_{start}_{train_end}_{test_start}"
+    if not refresh:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+    def _run():
+        from src.hmm_regime.data_loader import load_raw_data
+        from src.hmm_regime.features    import build_features
+        from src.hmm_regime.walk_forward import run_walk_forward
+        from src.hmm_regime.evaluate    import compute_regime_stats
+
+        raw      = load_raw_data(spy_ticker=ticker, start=start)
+        features = build_features(raw)
+        result   = run_walk_forward(
+            df_features       = features,
+            train_end         = train_end,
+            test_start        = test_start,
+            retrain_freq_days = 21,
+            n_components      = 3,
+            covariance_type   = "diag",
+            n_iter            = 200,
+            n_restarts        = 5,
+            random_state      = 42,
+        )
+
+        stats = compute_regime_stats(result, raw["spy_close"])
+        last  = result.iloc[-1]
+
+        series = [
+            {
+                "date":       str(idx.date()),
+                "regime":     row["regime"],
+                "p_bear":     round(row["p_bear"],     4),
+                "p_sideways": round(row["p_sideways"], 4),
+                "p_bull":     round(row["p_bull"],     4),
+                "spy_close":  round(float(raw["spy_close"].get(idx, float("nan"))), 4),
+            }
+            for idx, row in result.iterrows()
+        ]
+
+        regime_stats = {
+            regime: {
+                "frequency_pct":     float(stats.loc[regime, "frequency_pct"]),
+                "avg_duration_days": float(stats.loc[regime, "avg_duration_days"]),
+                "ann_return_pct":    float(stats.loc[regime, "ann_return_pct"]),
+                "ann_vol_pct":       float(stats.loc[regime, "ann_vol_pct"]),
+            }
+            for regime in ["bull", "sideways", "bear"]
+        }
+
+        return {
+            "ticker":          ticker,
+            "current_regime":  last["regime"],
+            "current_p_bull":  round(float(last["p_bull"]),     4),
+            "current_p_side":  round(float(last["p_sideways"]), 4),
+            "current_p_bear":  round(float(last["p_bear"]),     4),
+            "train_end":       train_end,
+            "test_start":      test_start,
+            "n_observations":  len(result),
+            "regime_stats":    regime_stats,
+            "series":          series,
+        }
+
+    try:
+        result = await asyncio.to_thread(_run)
+    except Exception as exc:
+        import traceback, sys
+        print(f"[HMM ERROR] {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        traceback.print_exc(file=sys.stderr)
+        raise HTTPException(status_code=422, detail=f"{type(exc).__name__}: {exc}")
+    result = _clean_floats(result)
+    cache.set(cache_key, result, ttl_seconds=21600)  # 6-hour cache
+    return result

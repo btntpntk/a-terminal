@@ -18,7 +18,7 @@ def _atr(prices: pd.DataFrame, period: int = 20) -> pd.DataFrame:
 
 class VolatilityBreakoutStrategy(TradingStrategy):
     name = "Volatility Breakout"
-    supports_short = True
+    supports_short = False
 
     def __init__(self, window: int = 20, atr_multiplier: float = 0.5):
         self.window         = window
@@ -26,11 +26,9 @@ class VolatilityBreakoutStrategy(TradingStrategy):
 
     def generate_signals(self, prices: pd.DataFrame, **kwargs) -> pd.DataFrame:
         high_20 = prices.rolling(self.window, min_periods=self.window).max()
-        low_20  = prices.rolling(self.window, min_periods=self.window).min()
         atr     = _atr(prices, self.window)
 
         signals = pd.DataFrame(0.0, index=prices.index, columns=prices.columns)
-        signals[prices > high_20 + self.atr_multiplier * atr] =  1.0
-        signals[prices < low_20  - self.atr_multiplier * atr] = -1.0
+        signals[prices > high_20 + self.atr_multiplier * atr] = 1.0
 
         return signals.fillna(0.0)

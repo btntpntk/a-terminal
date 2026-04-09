@@ -18,6 +18,7 @@ import { SectorsWidget }         from '../widgets/SectorsWidget';
 import { NewsWidget }            from '../widgets/NewsWidget';
 import { RankingsWidget }        from '../widgets/RankingsWidget';
 import { BacktestWidget }        from '../widgets/BacktestWidget';
+import { HMMRegimeWidget }       from '../widgets/HMMRegimeWidget';
 
 // ── Widgets that use the tab's activeTicker in their header ──
 const TICKER_WIDGETS = new Set<WidgetType>([
@@ -37,6 +38,7 @@ const WIDGET_LABELS: Record<WidgetType, string> = {
   'news':             'MARKET NEWS',
   'rankings':         'RANKINGS',
   'backtest':         'WALK-FORWARD BACKTEST',
+  'hmm-regime':       'HMM REGIME DETECTOR',
 };
 
 interface Props {
@@ -58,6 +60,7 @@ function WidgetBody({ widget, tabId }: Props) {
     case 'news':             return <NewsWidget            tabId={tabId} />;
     case 'rankings':         return <RankingsWidget        tabId={tabId} />;
     case 'backtest':         return <BacktestWidget        tabId={tabId} />;
+    case 'hmm-regime':       return <HMMRegimeWidget       tabId={tabId} />;
     default:                 return null;
   }
 }

@@ -12,7 +12,8 @@ export type WidgetType =
   | 'sectors'
   | 'news'
   | 'rankings'
-  | 'backtest';
+  | 'backtest'
+  | 'hmm-regime';
 
 export interface WidgetConfig {
   id: string;     // matches LayoutItem 'i'

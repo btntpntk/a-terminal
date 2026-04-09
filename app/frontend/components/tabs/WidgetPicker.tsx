@@ -26,6 +26,7 @@ const WIDGET_OPTIONS: WidgetOption[] = [
   { group: 'LISTS',      type: 'rankings',          label: 'Rankings',           desc: 'Full alpha scan table with RUN SCAN control' },
   // Backtesting
   { group: 'ANALYSIS',   type: 'backtest',          label: 'Walk-Forward Backtest', desc: 'Equity curve vs benchmark, KPIs, walk-forward folds' },
+  { group: 'ANALYSIS',   type: 'hmm-regime',        label: 'HMM Regime Detector',   desc: 'Expanding-window Gaussian HMM — bull/sideways/bear with posteriors' },
 ];
 
 interface Props {

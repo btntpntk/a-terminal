@@ -14,7 +14,7 @@ from src.backtesting.interfaces import TradingStrategy
 
 class MeanReversionStrategy(TradingStrategy):
     name = "Mean Reversion"
-    supports_short = True
+    supports_short = False
 
     def __init__(self, short_window: int = 20, long_window: int = 252, z_threshold: float = 1.5):
         self.short_window = short_window
@@ -28,7 +28,6 @@ class MeanReversionStrategy(TradingStrategy):
         z_score   = (ret_20 - roll_mean) / roll_std.replace(0, float("nan"))
 
         signals = pd.DataFrame(0.0, index=prices.index, columns=prices.columns)
-        signals[z_score < -self.z_threshold] =  1.0
-        signals[z_score >  self.z_threshold] = -1.0
+        signals[z_score < -self.z_threshold] = 1.0
 
         return signals.fillna(0.0)

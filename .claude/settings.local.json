@@ -12,7 +12,10 @@
       "Bash(poetry run:*)",
       "Bash(poetry env:*)",
       "Bash(\"C:\\\\Users\\\\TRNTTI\\\\AppData\\\\Local\\\\pypoetry\\\\Cache\\\\virtualenvs\\\\ai-hedge-fund-MvdIjt0C-py3.11\\\\Scripts\\\\pip.exe\" install:*)",
-      "Bash('C:\\\\Users\\\\TRNTTI\\\\AppData\\\\Local\\\\pypoetry\\\\Cache\\\\virtualenvs\\\\ai-hedge-fund-MvdIjt0C-py3.11\\\\Scripts\\\\python.exe' -c ':*)"
+      "Bash('C:\\\\Users\\\\TRNTTI\\\\AppData\\\\Local\\\\pypoetry\\\\Cache\\\\virtualenvs\\\\ai-hedge-fund-MvdIjt0C-py3.11\\\\Scripts\\\\python.exe' -c ':*)",
+      "Bash(python -m pytest src/hmm_regime/tests/test_no_lookahead.py -v --tb=short)",
+      "Bash(node -e \"const r = require\\('/c/Users/TRNTTI/Documents/alphas/app/frontend/node_modules/recharts'\\); console.log\\('ReferenceArea:', !!r.ReferenceArea, 'ComposedChart:', !!r.ComposedChart\\);\")",
+      "Bash(node -e \"const r = require\\('C:/Users/TRNTTI/Documents/alphas/app/frontend/node_modules/recharts'\\); console.log\\('ReferenceArea:', !!r.ReferenceArea, 'ComposedChart:', !!r.ComposedChart\\);\")"
     ]
   }
 }

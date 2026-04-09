@@ -22,7 +22,7 @@ def _rsi(prices: pd.DataFrame, period: int = 14) -> pd.DataFrame:
 
 class RSIStrategy(TradingStrategy):
     name = "RSI (14)"
-    supports_short = True
+    supports_short = False
 
     def __init__(self, period: int = 14, oversold: float = 30, overbought: float = 70):
         self.period     = period
@@ -33,7 +33,8 @@ class RSIStrategy(TradingStrategy):
         rsi = _rsi(prices, self.period)
 
         signals = pd.DataFrame(0.0, index=prices.index, columns=prices.columns)
-        signals[rsi < self.oversold]   =  1.0
-        signals[rsi > self.overbought] = -1.0
+        signals[rsi < self.oversold] = 1.0
+        # Exit (go flat) when overbought — signal drops to 0, no short
+        signals[rsi > self.overbought] = 0.0
 
         return signals.fillna(0.0)

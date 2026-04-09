@@ -205,11 +205,55 @@ export interface BacktestMetrics {
 export interface BacktestResponse {
   equity_curve:      Record<string, number>;
   benchmark_curve:   Record<string, number>;
+  /** Only present in single-ticker mode. Asset price rebased to initial_capital from day one. */
+  buyhold_curve?:    Record<string, number> | null;
   fold_boundaries:   string[];
   metrics:           BacktestMetrics;
   trade_log_summary: { total_trades: number; long_trades: number; short_trades: number };
+  trade_markers:     Array<{ date: string; type: 'buy' | 'sell' | 'stop' }>;
+  trade_log:         Array<{
+    asset:          string;
+    entry_date:     string;
+    exit_date:      string;
+    entry_price:    number;
+    exit_price:     number;
+    return_pct:     number;
+    pnl:            number;
+    balance:        number;
+    stop_triggered: boolean;
+  }>;
   /** Sampled daily weights: each entry is {date, ticker: weight, ...}. Positive = long, negative = short. */
   positions_chart:   Array<Record<string, number | string>>;
+}
+
+// HMM Regime
+export interface HMMRegimeStat {
+  frequency_pct: number;
+  avg_duration_days: number;
+  ann_return_pct: number;
+  ann_vol_pct: number;
+}
+
+export interface HMMRegimePoint {
+  date: string;
+  regime: 'bull' | 'sideways' | 'bear';
+  p_bear: number;
+  p_sideways: number;
+  p_bull: number;
+  spy_close: number | null;
+}
+
+export interface HMMRegimeResponse {
+  ticker: string;
+  current_regime: 'bull' | 'sideways' | 'bear';
+  current_p_bull: number;
+  current_p_side: number;
+  current_p_bear: number;
+  train_end: string;
+  test_start: string;
+  n_observations: number;
+  regime_stats: { bull: HMMRegimeStat; sideways: HMMRegimeStat; bear: HMMRegimeStat };
+  series: HMMRegimePoint[];
 }
 
 export interface BacktestRequest {
@@ -219,4 +263,8 @@ export interface BacktestRequest {
   max_stop_loss_pct: number;
   initial_capital:   number;
   period_years:      number;
+  /** Single-ticker mode: when set, ignores universe/optimizer and tests one asset vs benchmark. */
+  single_ticker?:    string;
+  /** Explicit benchmark for single-ticker mode. If omitted, auto-inferred server-side from ticker suffix. */
+  benchmark_ticker?: string;
 }

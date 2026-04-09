@@ -100,3 +100,12 @@ export function useRefreshRankings() {
   const qc = useQueryClient();
   return () => qc.invalidateQueries({ queryKey: ['rankings', universe] });
 }
+
+export function useHMMRegime(ticker = 'SPY') {
+  return useQuery({
+    queryKey: ['hmm-regime', ticker],
+    queryFn: () => api.hmmRegime({ ticker }),
+    staleTime: 6 * 60 * 60 * 1000,   // 6 hours — matches backend cache
+    retry: false,
+  });
+}

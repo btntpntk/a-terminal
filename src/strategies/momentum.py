@@ -14,7 +14,7 @@ from src.backtesting.interfaces import TradingStrategy
 
 class MomentumStrategy(TradingStrategy):
     name = "Momentum (12-1)"
-    supports_short = True
+    supports_short = False
 
     def generate_signals(self, prices: pd.DataFrame, **kwargs) -> pd.DataFrame:
         signals = pd.DataFrame(0.0, index=prices.index, columns=prices.columns)
@@ -37,10 +37,8 @@ class MomentumStrategy(TradingStrategy):
                     quintile = max(1, n // 5)
                     ranked   = row.rank(ascending=True)
                     sig      = pd.Series(0.0, index=prices.columns)
-                    short_tickers = ranked[ranked <= quintile].index
-                    long_tickers  = ranked[ranked >= n - quintile + 1].index
-                    sig.loc[short_tickers] = -1.0
-                    sig.loc[long_tickers]  =  1.0
+                    long_tickers = ranked[ranked >= n - quintile + 1].index
+                    sig.loc[long_tickers] = 1.0
                     last_signal = sig
 
             signals.loc[date] = last_signal

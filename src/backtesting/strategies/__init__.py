@@ -5,8 +5,10 @@ from src.strategies import (          # noqa: F401
     MomentumStrategy,
     MeanReversionStrategy,
     MovingAverageCrossStrategy,
+    EMACrossStrategy,
     RSIStrategy,
     VolatilityBreakoutStrategy,
+    DRSIStrategy,
     STRATEGY_MAP,
 )
 
@@ -14,7 +16,9 @@ __all__ = [
     "MomentumStrategy",
     "MeanReversionStrategy",
     "MovingAverageCrossStrategy",
+    "EMACrossStrategy",
     "RSIStrategy",
     "VolatilityBreakoutStrategy",
+    "DRSIStrategy",
     "STRATEGY_MAP",
 ]

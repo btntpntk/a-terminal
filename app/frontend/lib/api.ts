@@ -69,4 +69,17 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(req),
     }),
+
+  inferBenchmark: (ticker: string) =>
+    apiFetch<{ benchmark: string }>(`/api/backtest/infer-benchmark?ticker=${encodeURIComponent(ticker)}`),
+
+  hmmRegime: (params?: { ticker?: string; start?: string; train_end?: string; test_start?: string; refresh?: boolean }) => {
+    const p = new URLSearchParams();
+    if (params?.ticker)     p.set('ticker',     params.ticker);
+    if (params?.start)      p.set('start',      params.start);
+    if (params?.train_end)  p.set('train_end',  params.train_end);
+    if (params?.test_start) p.set('test_start', params.test_start);
+    if (params?.refresh)    p.set('refresh',    'true');
+    return apiFetch<import('../types/api').HMMRegimeResponse>(`/api/hmm-regime?${p}`);
+  },
 };

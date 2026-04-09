@@ -17,8 +17,10 @@ const STRATEGIES = [
   { value: 'MomentumStrategy',           label: 'Momentum (12-1)' },
   { value: 'MeanReversionStrategy',      label: 'Mean Reversion' },
   { value: 'MovingAverageCrossStrategy', label: 'MA Cross (20/50)' },
+  { value: 'EMACrossStrategy',           label: 'EMA Cross (12/26)' },
   { value: 'RSIStrategy',                label: 'RSI (14)' },
   { value: 'VolatilityBreakoutStrategy', label: 'Volatility Breakout' },
+  { value: 'DRSIStrategy',               label: 'DRSI (Dual RSI)' },
 ];
 
 const UNIVERSES = [
@@ -53,6 +55,8 @@ const DEFAULT_CONFIG: BacktestConfig = {
   initial_capital:   1_000_000,
   period_years:      3,
 };
+
+type BacktestMode = 'universe' | 'single';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -113,16 +117,71 @@ function PositionsTooltip({ active, payload, label }: any) {
 
 // ── Chart data preparation ────────────────────────────────────────────────
 
+function toReturnPct(curve: Record<string, number>): Record<string, number> {
+  const dates = Object.keys(curve).sort();
+  if (dates.length === 0) return {};
+  const base = curve[dates[0]];
+  if (!base) return {};
+  const out: Record<string, number> = {};
+  for (const d of dates) out[d] = (curve[d] / base - 1) * 100;
+  return out;
+}
+
 function buildChartData(
   equity: Record<string, number>,
   benchmark: Record<string, number>,
-): Array<{ date: string; portfolio: number; benchmark: number }> {
-  const allDates = Array.from(new Set([...Object.keys(equity), ...Object.keys(benchmark)])).sort();
-  return allDates.map(date => ({
-    date,
-    portfolio: equity[date] ?? NaN,
-    benchmark: benchmark[date] ?? NaN,
-  })).filter(d => !isNaN(d.portfolio) || !isNaN(d.benchmark));
+  buyhold?: Record<string, number> | null,
+  markers?: Array<{ date: string; type: 'buy' | 'sell' }>,
+): Array<{ date: string; portfolio: number; benchmark: number; buyhold?: number; buySignal?: number; sellSignal?: number; stopSignal?: number }> {
+  const pctEquity    = toReturnPct(equity);
+  const pctBenchmark = toReturnPct(benchmark);
+  const pctBuyhold   = buyhold ? toReturnPct(buyhold) : null;
+
+  const buyDates  = new Set(markers?.filter(m => m.type === 'buy').map(m => m.date)  ?? []);
+  const sellDates = new Set(markers?.filter(m => m.type === 'sell').map(m => m.date) ?? []);
+  const stopDates = new Set(markers?.filter(m => m.type === 'stop').map(m => m.date) ?? []);
+
+  const allDates = Array.from(new Set([
+    ...Object.keys(pctEquity),
+    ...Object.keys(pctBenchmark),
+    ...(pctBuyhold ? Object.keys(pctBuyhold) : []),
+  ])).sort();
+
+  return allDates.map(date => {
+    const portfolioPct = pctEquity[date] ?? NaN;
+    return {
+      date,
+      portfolio: portfolioPct,
+      benchmark: pctBenchmark[date] ?? NaN,
+      ...(pctBuyhold  != null ? { buyhold:    pctBuyhold[date]  ?? NaN } : {}),
+      ...(buyDates.has(date)  ? { buySignal:  pctBuyhold ? (pctBuyhold[date] ?? NaN) : portfolioPct } : {}),
+      ...(sellDates.has(date) ? { sellSignal: pctBuyhold ? (pctBuyhold[date] ?? NaN) : portfolioPct } : {}),
+      ...(stopDates.has(date) ? { stopSignal: pctBuyhold ? (pctBuyhold[date] ?? NaN) : portfolioPct } : {}),
+    };
+  }).filter(d => !isNaN(d.portfolio) || !isNaN(d.benchmark));
+}
+
+// ── Trade marker dot shapes ───────────────────────────────────────────────
+
+function BuyDot(props: any) {
+  const { cx, cy } = props;
+  if (cx == null || cy == null) return null;
+  const s = 3;
+  return <polygon points={`${cx},${cy - s} ${cx - s},${cy + s} ${cx + s},${cy + s}`} fill="#4ade80" opacity={0.9} />;
+}
+
+function SellDot(props: any) {
+  const { cx, cy } = props;
+  if (cx == null || cy == null) return null;
+  const s = 3;
+  return <polygon points={`${cx},${cy + s} ${cx - s},${cy - s} ${cx + s},${cy - s}`} fill="#f87171" opacity={0.9} />;
+}
+
+function StopDot(props: any) {
+  const { cx, cy } = props;
+  if (cx == null || cy == null) return null;
+  const s = 3;
+  return <polygon points={`${cx},${cy + s} ${cx - s},${cy - s} ${cx + s},${cy - s}`} fill="#f87171" stroke="#7f1d1d" strokeWidth={1} opacity={0.9} />;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────
@@ -213,7 +272,7 @@ function ChartTooltip({ active, payload, label }: any) {
       <div style={{ color: '#888', marginBottom: 4 }}>{label}</div>
       {payload.map((p: any) => (
         <div key={p.dataKey} style={{ color: p.color }}>
-          {p.name}: {p.value != null ? fmtCurrency(p.value) : '—'}
+          {p.name}: {p.value != null ? `${p.value >= 0 ? '+' : ''}${p.value.toFixed(1)}%` : '—'}
         </div>
       ))}
     </div>
@@ -225,8 +284,26 @@ function ChartTooltip({ active, payload, label }: any) {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface Props { tabId: string }
 
+// Client-side benchmark inference (mirrors server logic) for instant UI feedback
+function inferBenchmarkLocal(ticker: string): string {
+  const t = ticker.toUpperCase();
+  if (t.endsWith('-USD') || t.endsWith('-USDT') || t.endsWith('-BTC')) return 'BTC-USD';
+  if (t.endsWith('.BK'))  return '^SET.BK';
+  if (t.endsWith('.L'))   return '^FTSE';
+  if (t.endsWith('.T'))   return '^N225';
+  if (t.endsWith('.AX'))  return '^AXJO';
+  if (t.endsWith('.HK'))  return '^HSI';
+  if (t.endsWith('.DE'))  return '^GDAXI';
+  if (t.endsWith('.TO'))  return '^GSPTSE';
+  return 'SPY';
+}
+
 export function BacktestWidget({ tabId: _ }: Props) {
-  const [config, setConfig]       = useState<BacktestConfig>(DEFAULT_CONFIG);
+  const [mode, setMode]                 = useState<BacktestMode>('universe');
+  const [singleTicker, setSingleTicker] = useState('AAPL');
+  const [benchmark, setBenchmark]       = useState('SPY');
+  const [benchmarkEdited, setBenchmarkEdited] = useState(false);
+  const [config, setConfig]             = useState<BacktestConfig>(DEFAULT_CONFIG);
   const [running, setRunning]     = useState(false);
   const [result, setResult]       = useState<BacktestResult | null>(null);
   const [error, setError]         = useState<string | null>(null);
@@ -240,7 +317,10 @@ export function BacktestWidget({ tabId: _ }: Props) {
     setRunning(true);
     setError(null);
     try {
-      const data = await api.runBacktest(config);
+      const req: BacktestConfig = mode === 'single'
+        ? { ...config, single_ticker: singleTicker.toUpperCase().trim(), benchmark_ticker: benchmark.toUpperCase().trim() || undefined }
+        : { ...config, single_ticker: undefined, benchmark_ticker: undefined };
+      const data = await api.runBacktest(req);
       setResult(data);
       setPhase('results');
     } catch (e: any) {
@@ -266,9 +346,26 @@ export function BacktestWidget({ tabId: _ }: Props) {
   if (phase === 'config') {
     return (
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16, height: '100%', overflowY: 'auto' }}>
-        <div style={{ fontSize: 11, color: '#888' }}>Configure and run a walk-forward backtest.</div>
 
-        {/* Row 1 */}
+        {/* Mode toggle */}
+        <div style={{ display: 'flex', gap: 0, alignSelf: 'flex-start', border: '1px solid #2d2d4e', borderRadius: 6, overflow: 'hidden' }}>
+          {(['universe', 'single'] as BacktestMode[]).map(m => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              style={{
+                padding: '5px 14px', fontSize: 11, cursor: 'pointer', border: 'none',
+                background: mode === m ? '#3730a3' : '#111128',
+                color: mode === m ? '#e0e0ff' : '#666',
+                fontWeight: mode === m ? 600 : 400,
+              }}
+            >
+              {m === 'universe' ? 'Universe' : 'Single Stock'}
+            </button>
+          ))}
+        </div>
+
+        {/* Strategy row (always shown) */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <LabeledSelect
             label="Trading Strategy"
@@ -276,22 +373,76 @@ export function BacktestWidget({ tabId: _ }: Props) {
             options={STRATEGIES}
             onChange={update('strategy')}
           />
-          <LabeledSelect
-            label="Universe"
-            value={config.universe}
-            options={UNIVERSES}
-            onChange={update('universe')}
-          />
+
+          {/* Universe mode: universe + optimizer selectors */}
+          {mode === 'universe' && (
+            <LabeledSelect
+              label="Universe"
+              value={config.universe}
+              options={UNIVERSES}
+              onChange={update('universe')}
+            />
+          )}
+
+          {/* Single stock mode: ticker + benchmark inputs */}
+          {mode === 'single' && (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 120 }}>
+                <label style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Ticker
+                </label>
+                <input
+                  type="text"
+                  value={singleTicker}
+                  onChange={e => {
+                    const t = e.target.value.toUpperCase();
+                    setSingleTicker(t);
+                    if (!benchmarkEdited) setBenchmark(inferBenchmarkLocal(t));
+                  }}
+                  placeholder="e.g. AAPL"
+                  style={{
+                    background: '#111128', color: '#e0e0f0', border: '1px solid #2d2d4e',
+                    borderRadius: 4, padding: '5px 8px', fontSize: 12, width: '100%',
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 120 }}>
+                <label style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Benchmark
+                </label>
+                <input
+                  type="text"
+                  value={benchmark}
+                  onChange={e => {
+                    setBenchmark(e.target.value.toUpperCase());
+                    setBenchmarkEdited(true);
+                  }}
+                  onBlur={e => { if (!e.target.value.trim()) { setBenchmark(inferBenchmarkLocal(singleTicker)); setBenchmarkEdited(false); } }}
+                  placeholder="e.g. SPY"
+                  style={{
+                    background: '#111128', color: benchmarkEdited ? '#e0e0f0' : '#a0a0c0',
+                    border: `1px solid ${benchmarkEdited ? '#4f46e5' : '#2d2d4e'}`,
+                    borderRadius: 4, padding: '5px 8px', fontSize: 12, width: '100%',
+                  }}
+                />
+                <div style={{ fontSize: 9, color: '#555' }}>
+                  {benchmarkEdited ? 'custom' : 'auto-detected'} · full allocation · no optimizer
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Row 2 */}
+        {/* Optimizer row — only shown in universe mode */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <LabeledSelect
-            label="Portfolio Optimization"
-            value={config.optimizer}
-            options={OPTIMIZERS}
-            onChange={update('optimizer')}
-          />
+          {mode === 'universe' && (
+            <LabeledSelect
+              label="Portfolio Optimization"
+              value={config.optimizer}
+              options={OPTIMIZERS}
+              onChange={update('optimizer')}
+            />
+          )}
           <LabeledSelect
             label="Backtest Period"
             value={config.period_years}
@@ -300,7 +451,7 @@ export function BacktestWidget({ tabId: _ }: Props) {
           />
         </div>
 
-        {/* Row 3 */}
+        {/* Capital & stop-loss */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <LabeledNumber
             label="Initial Capital"
@@ -354,9 +505,11 @@ export function BacktestWidget({ tabId: _ }: Props) {
   if (!result) return null;
 
   const m = result.metrics;
-  const chartData = buildChartData(result.equity_curve, result.benchmark_curve);
+  const chartData = buildChartData(result.equity_curve, result.benchmark_curve, result.buyhold_curve, result.trade_markers);
   const stratLabel = STRATEGIES.find(s => s.value === config.strategy)?.label ?? config.strategy;
-  const uniLabel   = UNIVERSES.find(u => u.value === config.universe)?.label ?? config.universe;
+  const scopeLabel = mode === 'single'
+    ? `${singleTicker.toUpperCase()} vs ${benchmark.toUpperCase()}`
+    : (UNIVERSES.find(u => u.value === config.universe)?.label ?? config.universe);
 
   // Sample chart data to reduce rendering (max 500 points)
   const step = Math.max(1, Math.floor(chartData.length / 500));
@@ -374,7 +527,7 @@ export function BacktestWidget({ tabId: _ }: Props) {
           onClick={() => setPhase('config')}
           style={{ background: 'none', border: '1px solid #2d2d4e', color: '#888', borderRadius: 4, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}
         >← Reconfigure</button>
-        <span style={{ fontSize: 11, color: '#888' }}>{stratLabel} · {uniLabel} · {config.period_years}Y</span>
+        <span style={{ fontSize: 11, color: '#888' }}>{stratLabel} · {scopeLabel} · {config.period_years}Y</span>
         {error && <span style={{ fontSize: 11, color: '#f87171', marginLeft: 'auto' }}>{error}</span>}
       </div>
 
@@ -384,14 +537,20 @@ export function BacktestWidget({ tabId: _ }: Props) {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={sampledData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
               <XAxis dataKey="date" tickFormatter={xTickFmt} tick={{ fontSize: 10, fill: '#666' }} minTickGap={40} />
-              <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10, fill: '#666' }} width={52} />
+              <YAxis tickFormatter={v => `${v >= 0 ? '+' : ''}${v.toFixed(0)}%`} tick={{ fontSize: 10, fill: '#666' }} width={52} />
               <Tooltip content={<ChartTooltip />} />
               <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
               {result.fold_boundaries.map((d, i) => (
                 <ReferenceLine key={i} x={d} stroke="#2d2d4e" strokeDasharray="3 3" />
               ))}
+              {result.buyhold_curve && (
+                <Line type="monotone" dataKey="buyhold" name="Buy & Hold" stroke="#4b5563" strokeWidth={1} dot={false} connectNulls />
+              )}
+              <Line type="monotone" dataKey="benchmark" name="Benchmark" stroke="#374151" strokeWidth={1} dot={false} strokeDasharray="4 2" connectNulls />
               <Line type="monotone" dataKey="portfolio" name="Portfolio" stroke="#818cf8" strokeWidth={1.5} dot={false} connectNulls />
-              <Line type="monotone" dataKey="benchmark" name="Benchmark" stroke="#4b5563" strokeWidth={1} dot={false} strokeDasharray="4 2" connectNulls />
+              <Line dataKey="buySignal"  name="Buy"  stroke="none" strokeWidth={0} dot={<BuyDot />}  activeDot={false} legendType="none" isAnimationActive={false} />
+              <Line dataKey="sellSignal" name="Sell" stroke="none" strokeWidth={0} dot={<SellDot />} activeDot={false} legendType="none" isAnimationActive={false} />
+              <Line dataKey="stopSignal" name="Stop" stroke="none" strokeWidth={0} dot={<StopDot />} activeDot={false} legendType="none" isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -461,8 +620,8 @@ export function BacktestWidget({ tabId: _ }: Props) {
           />
         </div>
 
-        {/* Positions chart toggle */}
-        {result.positions_chart.length > 0 && (
+        {/* Positions toggle */}
+        {(result.positions_chart.length > 0 || result.trade_log.length > 0) && (
           <div style={{ marginTop: 16 }}>
             <button
               onClick={() => setShowPositions(v => !v)}
@@ -481,42 +640,94 @@ export function BacktestWidget({ tabId: _ }: Props) {
             </button>
 
             {showPositions && (
-              <div>
-                <div style={{ fontSize: 10, color: '#666', marginBottom: 8 }}>
-                  Open positions by weight · positive = long · negative = short
-                </div>
-                <div style={{ height: 220 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={result.positions_chart}
-                      margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
-                      stackOffset="sign"
-                    >
-                      <XAxis
-                        dataKey="date"
-                        tickFormatter={(d: string) => d?.slice(0, 4) ?? ''}
-                        tick={{ fontSize: 10, fill: '#666' }}
-                        minTickGap={40}
-                      />
-                      <YAxis
-                        tickFormatter={(v: number) => `${(v * 100).toFixed(0)}%`}
-                        tick={{ fontSize: 10, fill: '#666' }}
-                        width={42}
-                      />
-                      <Tooltip content={<PositionsTooltip />} />
-                      {positionTickers.map((ticker, i) => (
-                        <Bar
-                          key={ticker}
-                          dataKey={ticker}
-                          name={ticker}
-                          stackId="pos"
-                          fill={POSITION_COLORS[i % POSITION_COLORS.length]}
-                          isAnimationActive={false}
-                        />
-                      ))}
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                {/* Weight bar chart */}
+                {result.positions_chart.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, color: '#666', marginBottom: 8 }}>
+                      Open positions by weight · positive = long · negative = short
+                    </div>
+                    <div style={{ height: 180 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={result.positions_chart}
+                          margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
+                          stackOffset="sign"
+                        >
+                          <XAxis
+                            dataKey="date"
+                            tickFormatter={(d: string) => d?.slice(0, 4) ?? ''}
+                            tick={{ fontSize: 10, fill: '#666' }}
+                            minTickGap={40}
+                          />
+                          <YAxis
+                            tickFormatter={(v: number) => `${(v * 100).toFixed(0)}%`}
+                            tick={{ fontSize: 10, fill: '#666' }}
+                            width={42}
+                          />
+                          <Tooltip content={<PositionsTooltip />} />
+                          {positionTickers.map((ticker, i) => (
+                            <Bar
+                              key={ticker}
+                              dataKey={ticker}
+                              name={ticker}
+                              stackId="pos"
+                              fill={POSITION_COLORS[i % POSITION_COLORS.length]}
+                              isAnimationActive={false}
+                            />
+                          ))}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+
+                {/* Trade log table */}
+                {result.trade_log.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, color: '#666', marginBottom: 6 }}>
+                      Trade history · {result.trade_log.length} trades
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'monospace' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid #2d2d4e' }}>
+                            {['Asset', 'Buy Date', 'Sell Date', 'Buy Price', 'Sell Price', 'PnL %', 'PnL', 'Balance'].map(h => (
+                              <th key={h} style={{ padding: '4px 8px', color: '#666', fontWeight: 500, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {result.trade_log.map((t, i) => {
+                            const win = t.pnl >= 0;
+                            return (
+                              <tr key={i} style={{ borderBottom: '1px solid #1a1a2e', background: i % 2 === 0 ? 'transparent' : '#0d0d1a' }}>
+                                <td style={{ padding: '3px 8px', color: '#a0a0c0', textAlign: 'right' }}>{t.asset}</td>
+                                <td style={{ padding: '3px 8px', color: '#666',    textAlign: 'right' }}>{t.entry_date}</td>
+                                <td style={{ padding: '3px 8px', color: '#666',    textAlign: 'right' }}>{t.exit_date}{t.stop_triggered ? ' ⊗' : ''}</td>
+                                <td style={{ padding: '3px 8px', color: '#888',    textAlign: 'right' }}>{t.entry_price.toFixed(2)}</td>
+                                <td style={{ padding: '3px 8px', color: '#888',    textAlign: 'right' }}>{t.exit_price.toFixed(2)}</td>
+                                <td style={{ padding: '3px 8px', color: win ? '#4ade80' : '#f87171', textAlign: 'right' }}>
+                                  {t.return_pct >= 0 ? '+' : ''}{(t.return_pct * 100).toFixed(2)}%
+                                </td>
+                                <td style={{ padding: '3px 8px', color: win ? '#4ade80' : '#f87171', textAlign: 'right' }}>
+                                  {t.pnl >= 0 ? '+' : ''}{t.pnl.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                </td>
+                                <td style={{ padding: '3px 8px', color: '#e0e0f0', textAlign: 'right' }}>
+                                  {t.balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
               </div>
             )}
           </div>

@@ -77,7 +77,8 @@ def run_backtest(
     tickers = list(prices.columns)
 
     # Generate ALL signals up-front (strategies are rule-based / reactive, not fitted)
-    all_signals = strategy.generate_signals(prices)
+    # Pass benchmark_prices so strategies like DRSI can access it via **kwargs
+    all_signals = strategy.generate_signals(prices, benchmark_prices=benchmark_prices)
     # Ensure same shape and fill NaN with 0
     all_signals = all_signals.reindex_like(prices).fillna(0)
 
@@ -92,6 +93,9 @@ def run_backtest(
 
     # Stop-loss tracking: {ticker: {"entry_price": float, "direction": int}}
     open_positions: dict[str, dict] = {}
+
+    # Track last day's prices across folds so fold boundaries don't drop a day's P&L
+    prev_prices_global: pd.Series | None = None
 
     all_test_dates = set()
     weights_rows: list[tuple[pd.Timestamp, dict]] = []
@@ -153,13 +157,15 @@ def run_backtest(
             cost = turnover * transaction_cost_pct
 
             # ── Daily P&L ─────────────────────────────────────────────
-            if i == 0:
-                # First day of fold: no prior weights yet for this period
+            if prev_prices_global is None:
+                # Absolute first day of the entire backtest — no prior prices
                 daily_return = 0.0
             else:
-                prev_prices = test_prices.iloc[i - 1]
-                asset_returns = (today_prices / prev_prices - 1).fillna(0.0)
+                ref_prices = test_prices.iloc[i - 1] if i > 0 else prev_prices_global
+                asset_returns = (today_prices / ref_prices - 1).fillna(0.0)
                 daily_return = float((current_weights * asset_returns).sum())
+
+            prev_prices_global = today_prices
 
             portfolio_return = daily_return - cost
             equity = equity * (1 + portfolio_return)
@@ -174,25 +180,32 @@ def run_backtest(
                     continue
 
                 if old_w == 0 and new_w != 0:
-                    # Opening position
+                    # Opening position — snapshot equity and weight at entry
                     open_positions[ticker] = {
-                        "entry_price": cur_price,
-                        "entry_date":  date,
-                        "direction":   1 if new_w > 0 else -1,
+                        "entry_price":  cur_price,
+                        "entry_date":   date,
+                        "entry_equity": equity,
+                        "entry_weight": abs(new_w),
+                        "direction":    1 if new_w > 0 else -1,
                     }
                 elif old_w != 0 and new_w == 0:
                     # Closing position — record trade
                     pos = open_positions.pop(ticker, None)
                     if pos is not None:
                         ret_pct = (cur_price / pos["entry_price"] - 1) * pos["direction"]
-                        pnl = abs(old_w) * equity * ret_pct
+                        # Capital committed at entry × price return = correct dollar PnL
+                        capital_at_entry = pos["entry_weight"] * pos["entry_equity"]
+                        pnl = capital_at_entry * ret_pct
                         trade_records.append({
-                            "asset":         ticker,
-                            "entry_date":    pos["entry_date"],
-                            "exit_date":     date,
-                            "direction":     "long" if pos["direction"] == 1 else "short",
-                            "return_pct":    ret_pct,
-                            "pnl":           pnl,
+                            "asset":          ticker,
+                            "entry_date":     pos["entry_date"],
+                            "exit_date":      date,
+                            "entry_price":    pos["entry_price"],
+                            "exit_price":     cur_price,
+                            "direction":      "long" if pos["direction"] == 1 else "short",
+                            "return_pct":     ret_pct,
+                            "pnl":            pnl,
+                            "equity_at_exit": equity,
                             "stop_triggered": ticker in stopped_tickers,
                         })
                 elif old_w != 0 and new_w != 0 and (old_w * new_w < 0):
@@ -200,20 +213,26 @@ def run_backtest(
                     pos = open_positions.pop(ticker, None)
                     if pos is not None:
                         ret_pct = (cur_price / pos["entry_price"] - 1) * pos["direction"]
-                        pnl = abs(old_w) * equity * ret_pct
+                        capital_at_entry = pos["entry_weight"] * pos["entry_equity"]
+                        pnl = capital_at_entry * ret_pct
                         trade_records.append({
-                            "asset":         ticker,
-                            "entry_date":    pos["entry_date"],
-                            "exit_date":     date,
-                            "direction":     "long" if pos["direction"] == 1 else "short",
-                            "return_pct":    ret_pct,
-                            "pnl":           pnl,
+                            "asset":          ticker,
+                            "entry_date":     pos["entry_date"],
+                            "exit_date":      date,
+                            "entry_price":    pos["entry_price"],
+                            "exit_price":     cur_price,
+                            "direction":      "long" if pos["direction"] == 1 else "short",
+                            "return_pct":     ret_pct,
+                            "pnl":            pnl,
+                            "equity_at_exit": equity,
                             "stop_triggered": False,
                         })
                     open_positions[ticker] = {
-                        "entry_price": cur_price,
-                        "entry_date":  date,
-                        "direction":   1 if new_w > 0 else -1,
+                        "entry_price":  cur_price,
+                        "entry_date":   date,
+                        "entry_equity": equity,
+                        "entry_weight": abs(new_w),
+                        "direction":    1 if new_w > 0 else -1,
                     }
 
             current_weights = target_weights.copy()
