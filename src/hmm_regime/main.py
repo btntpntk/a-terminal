@@ -1,80 +1,89 @@
-"""
-src/hmm_regime/main.py
-
-End-to-end orchestrator for the HMM Market Regime Detector.
-
-Usage
------
-    python -m src.hmm_regime.main
-"""
-
-from __future__ import annotations
-
-import sys
-from pathlib import Path
-
-_ROOT = Path(__file__).resolve().parents[3]
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
-
+import numpy as np
 import pandas as pd
 
-from src.hmm_regime.data_loader import load_raw_data
-from src.hmm_regime.features import build_features
-from src.hmm_regime.walk_forward import bias_audit_summary, run_walk_forward
-from src.hmm_regime.evaluate import plot_regimes, plot_posteriors, print_regime_stats
+from .data_loader import load_prices
+from .features import compute_features
+from .walk_forward import run_walk_forward
 
 
-SPY_TICKER      = "SPY"
-DATA_START      = "2000-01-01"
-TRAIN_END       = "2010-12-31"
-TEST_START      = "2011-01-01"
-RETRAIN_FREQ    = 21
-N_COMPONENTS    = 3
-COVARIANCE_TYPE = "diag"
-N_ITER          = 200
-N_RESTARTS      = 5
-RANDOM_STATE    = 42
-SAVE_PLOTS      = False
+def _compute_regime_stats(wf: pd.DataFrame, prices: pd.DataFrame) -> dict:
+    log_ret = np.log(prices["Close"] / prices["Close"].shift(1)).reindex(wf.index)
+    result = {}
 
+    for regime in ("bull", "sideways", "bear", "crash"):
+        mask = wf["regime"] == regime
+        n = int(mask.sum())
+        freq_pct = 100.0 * n / len(wf) if len(wf) > 0 else 0.0
 
-def main() -> pd.DataFrame:
-    print("[1/5] Loading raw data …")
-    raw = load_raw_data(spy_ticker=SPY_TICKER, start=DATA_START)
-    print(f"      Raw data: {raw.index[0].date()} → {raw.index[-1].date()} ({len(raw)} rows)")
+        spans: list[int] = []
+        span_len = 0
+        for v in mask:
+            if v:
+                span_len += 1
+            elif span_len > 0:
+                spans.append(span_len)
+                span_len = 0
+        if span_len > 0:
+            spans.append(span_len)
+        avg_dur = float(np.mean(spans)) if spans else 0.0
 
-    print("[2/5] Building features …")
-    features = build_features(raw)
-    print(f"      Features: {features.index[0].date()} → {features.index[-1].date()} "
-          f"({len(features)} rows, cols={list(features.columns)})")
+        regime_rets = log_ret[mask].dropna()
+        if len(regime_rets) > 1:
+            ann_return_pct = float(regime_rets.mean() * 252 * 100)
+            ann_vol_pct    = float(regime_rets.std() * np.sqrt(252) * 100)
+        else:
+            ann_return_pct = 0.0
+            ann_vol_pct    = 0.0
 
-    print("[3/5] Running walk-forward HMM …")
-    result = run_walk_forward(
-        df_features       = features,
-        train_end         = TRAIN_END,
-        test_start        = TEST_START,
-        retrain_freq_days = RETRAIN_FREQ,
-        n_components      = N_COMPONENTS,
-        covariance_type   = COVARIANCE_TYPE,
-        n_iter            = N_ITER,
-        n_restarts        = N_RESTARTS,
-        random_state      = RANDOM_STATE,
-    )
-    print(f"      Walk-forward complete: {len(result)} test observations.")
-
-    print("[4/5] Computing regime statistics …")
-    print_regime_stats(result, raw["spy_close"])
-
-    print("[5/5] Generating plots …")
-    regime_png    = "regime_plot.png"    if SAVE_PLOTS else None
-    posterior_png = "posterior_plot.png" if SAVE_PLOTS else None
-    plot_regimes(result, raw["spy_close"], save_path=regime_png)
-    plot_posteriors(result, save_path=posterior_png)
-
-    print(bias_audit_summary(result))
+        result[regime] = {
+            "frequency_pct":    round(freq_pct, 4),
+            "avg_duration_days": round(avg_dur, 4),
+            "ann_return_pct":   round(ann_return_pct, 4),
+            "ann_vol_pct":      round(ann_vol_pct, 4),
+        }
 
     return result
 
 
-if __name__ == "__main__":
-    main()
+def run_hmm_pipeline(ticker: str, start: str, train_end: str, test_start: str) -> dict:
+    prices   = load_prices(ticker, start)
+    features = compute_features(prices)
+    wf       = run_walk_forward(features, train_end)
+
+    test_start_dt = pd.Timestamp(test_start)
+    wf_test = wf[wf.index >= test_start_dt]
+
+    if wf_test.empty:
+        raise ValueError("No walk-forward results in the test window")
+
+    close_aligned = prices["Close"].reindex(wf_test.index)
+
+    series = [
+        {
+            "date":       date.strftime("%Y-%m-%d"),
+            "regime":     row["regime"],
+            "p_bull":     float(row["p_bull"]),
+            "p_sideways": float(row["p_sideways"]),
+            "p_bear":     float(row["p_bear"]),
+            "p_crash":    float(row["p_crash"]),
+            "close":      float(close_aligned.loc[date]) if not pd.isna(close_aligned.loc[date]) else None,
+        }
+        for date, row in wf_test.iterrows()
+    ]
+
+    last = wf_test.iloc[-1]
+    regime_stats = _compute_regime_stats(wf_test, prices)
+
+    return {
+        "ticker":         ticker,
+        "current_regime": last["regime"],
+        "current_p_bull": float(last["p_bull"]),
+        "current_p_side": float(last["p_sideways"]),
+        "current_p_bear": float(last["p_bear"]),
+        "current_p_crash": float(last["p_crash"]),
+        "train_end":      train_end,
+        "test_start":     test_start,
+        "n_observations": len(wf_test),
+        "regime_stats":   regime_stats,
+        "series":         series,
+    }

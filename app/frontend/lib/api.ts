@@ -70,6 +70,12 @@ export const api = {
       body: JSON.stringify(req),
     }),
 
+  runMCBacktest: (req: import('../types/api').MCBacktestRequest) =>
+    apiFetch<import('../types/api').MCBacktestResponse>('/api/backtest/run-mc', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+
   inferBenchmark: (ticker: string) =>
     apiFetch<{ benchmark: string }>(`/api/backtest/infer-benchmark?ticker=${encodeURIComponent(ticker)}`),
 

@@ -23,6 +23,7 @@ const DEFAULT_WIDGET_SIZES: Record<WidgetType, { w: number; h: number }> = {
   'news':             { w: 4,  h: 8  },
   'rankings':         { w: 12, h: 12 },
   'backtest':         { w: 10, h: 14 },
+  'hmm-regime':      { w: 7,  h: 12 },
 };
 
 /** Used by addTab() when the user clicks "+". */

@@ -1,1 +1,3 @@
-# src/hmm_regime/__init__.py
+from .main import run_hmm_pipeline
+
+__all__ = ["run_hmm_pipeline"]

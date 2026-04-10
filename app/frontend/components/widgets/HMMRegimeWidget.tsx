@@ -21,6 +21,7 @@ const REGIME_COLOR: Record<string, string> = {
   bull:     '#22c55e',
   sideways: '#94a3b8',
   bear:     '#ef4444',
+  crash:    '#7c3aed',
 };
 
 // Separate chart-background color for sideways: slightly warmer/brighter so it's
@@ -30,18 +31,21 @@ const REGIME_CHART_COLOR: Record<string, string> = {
   bull:     '#22c55e',
   sideways: '#64748b',   // slate-500 — more visible than slate-400 at low opacity
   bear:     '#ef4444',
+  crash:    '#7c3aed',
 };
 
 const REGIME_FILL_OPACITY: Record<string, number> = {
   bull:     0.20,
   sideways: 0.28,   // higher opacity to compensate for the low-contrast gray
   bear:     0.20,
+  crash:    0.20,
 };
 
 const REGIME_EMOJI: Record<string, string> = {
   bull:     '▲',
   sideways: '—',
   bear:     '▼',
+  crash:    '⚡',
 };
 
 // Rough expected seconds per year of test data (empirical)
@@ -300,7 +304,8 @@ export function HMMRegimeWidget({ tabId: _ }: Props) {
       p_bull:     +(p.p_bull * 100).toFixed(1),
       p_sideways: +(p.p_sideways * 100).toFixed(1),
       p_bear:     +(p.p_bear * 100).toFixed(1),
-      price:      p.spy_close ?? undefined,
+      p_crash:    +(p.p_crash * 100).toFixed(1),
+      price:      p.close ?? undefined,
     })),
     [result?.series],
   );
@@ -323,7 +328,7 @@ export function HMMRegimeWidget({ tabId: _ }: Props) {
             HMM Regime Detector
           </div>
           <div style={{ fontSize: 11, color: '#64748b' }}>
-            Expanding-window Gaussian HMM · 3 states · price + VIX · zero lookahead
+            Expanding-window Gaussian HMM · 4 states · log return + 21d vol · zero lookahead
           </div>
         </div>
 
@@ -336,7 +341,7 @@ export function HMMRegimeWidget({ tabId: _ }: Props) {
             value={tickerInput}
             onChange={e => setTickerInput(e.target.value.toUpperCase())}
             onKeyDown={e => e.key === 'Enter' && handleRun()}
-            placeholder="SPY, QQQ, AAPL…"
+            placeholder="SPY, PTT.BK, BTC-USD…"
             style={{
               background: '#111128', color: '#e0e0f0', border: '1px solid #2d2d4e',
               borderRadius: 4, padding: '6px 10px', fontSize: 13, width: '100%',
@@ -457,9 +462,10 @@ export function HMMRegimeWidget({ tabId: _ }: Props) {
           {REGIME_EMOJI[regime]} {regime.toUpperCase()}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
-          {(['bull', 'sideways', 'bear'] as const).map(r => {
-            const p = r === 'bull' ? result.current_p_bull
-                    : r === 'bear' ? result.current_p_bear
+          {(['bull', 'sideways', 'bear', 'crash'] as const).map(r => {
+            const p = r === 'bull'     ? result.current_p_bull
+                    : r === 'bear'     ? result.current_p_bear
+                    : r === 'crash'    ? result.current_p_crash
                     : result.current_p_side;
             return (
               <div key={r} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -582,6 +588,8 @@ export function HMMRegimeWidget({ tabId: _ }: Props) {
                 stroke={REGIME_COLOR.sideways} fill={REGIME_COLOR.sideways} fillOpacity={0.55} name="Sideways" />
               <Area type="monotone" dataKey="p_bear"     stackId="1"
                 stroke={REGIME_COLOR.bear}     fill={REGIME_COLOR.bear}     fillOpacity={0.55} name="Bear" />
+              <Area type="monotone" dataKey="p_crash"    stackId="1"
+                stroke={REGIME_COLOR.crash}    fill={REGIME_COLOR.crash}    fillOpacity={0.55} name="Crash" />
             </AreaChart>
           </ResponsiveContainer>
         )}
@@ -590,7 +598,7 @@ export function HMMRegimeWidget({ tabId: _ }: Props) {
       {/* ── Regime legend ─────────────────────────────────────────────────── */}
       {view === 'price' && (
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-          {(['bull', 'sideways', 'bear'] as const).map(r => (
+          {(['bull', 'sideways', 'bear', 'crash'] as const).map(r => (
             <div key={r} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#94a3b8' }}>
               <div style={{ width: 12, height: 12, borderRadius: 2, background: REGIME_COLOR[r], opacity: 0.7 }} />
               {r}
@@ -611,7 +619,7 @@ export function HMMRegimeWidget({ tabId: _ }: Props) {
           </tr>
         </thead>
         <tbody>
-          {(['bull', 'sideways', 'bear'] as const).map(r => {
+          {(['bull', 'sideways', 'bear', 'crash'] as const).map(r => {
             const s = result.regime_stats[r];
             const c = REGIME_COLOR[r];
             return (
@@ -632,7 +640,7 @@ export function HMMRegimeWidget({ tabId: _ }: Props) {
       </table>
 
       <div style={{ fontSize: 10, color: '#334155', textAlign: 'center' }}>
-        GaussianHMM diag · price returns + VIX · expanding window · refit every 21d
+        GaussianHMM diag · log return + 21d vol · expanding window · refit every 21d
       </div>
     </div>
   );

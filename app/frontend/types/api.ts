@@ -236,23 +236,25 @@ export interface HMMRegimeStat {
 
 export interface HMMRegimePoint {
   date: string;
-  regime: 'bull' | 'sideways' | 'bear';
+  regime: 'bull' | 'sideways' | 'bear' | 'crash';
   p_bear: number;
   p_sideways: number;
   p_bull: number;
-  spy_close: number | null;
+  p_crash: number;
+  close: number | null;
 }
 
 export interface HMMRegimeResponse {
   ticker: string;
-  current_regime: 'bull' | 'sideways' | 'bear';
+  current_regime: 'bull' | 'sideways' | 'bear' | 'crash';
   current_p_bull: number;
   current_p_side: number;
   current_p_bear: number;
+  current_p_crash: number;
   train_end: string;
   test_start: string;
   n_observations: number;
-  regime_stats: { bull: HMMRegimeStat; sideways: HMMRegimeStat; bear: HMMRegimeStat };
+  regime_stats: { bull: HMMRegimeStat; sideways: HMMRegimeStat; bear: HMMRegimeStat; crash: HMMRegimeStat };
   series: HMMRegimePoint[];
 }
 
@@ -267,4 +269,102 @@ export interface BacktestRequest {
   single_ticker?:    string;
   /** Explicit benchmark for single-ticker mode. If omitted, auto-inferred server-side from ticker suffix. */
   benchmark_ticker?: string;
+}
+
+// Monte Carlo Integrated Backtest
+export interface MCBacktestRequest {
+  // Strategies
+  buy_strategy:  string;
+  sell_strategy: string;  // strategy name | "TP_SL" | "BOTH"
+  // Universe / single-stock mode
+  universe: string;
+  /** Single-ticker mode: when set, ignores universe and tests one asset. */
+  single_ticker?:    string;
+  /** Explicit benchmark for single-ticker mode. Auto-inferred if omitted. */
+  benchmark_ticker?: string;
+  // Backtest period
+  backtest_start: string;
+  backtest_end:   string;
+  // Capital & risk
+  initial_capital:      number;
+  max_stop_loss_pct:    number;
+  acceptable_risk_pct:  number;
+  // MC simulation
+  n_simulations:      number;
+  holding_days:       number;
+  tp_quantile:        number;
+  sl_quantile:        number;
+  shock_distribution: string;
+  student_t_df:       number;
+  // Volatility estimation
+  vol_lookback_days:  number;
+  vol_method:         string;
+  ewma_halflife_days: number;
+  vol_floor:          number;
+  vol_cap:            number;
+  drift_method:       string;
+  // Position & portfolio controls
+  max_open_positions:       number;
+  max_position_pct:         number;
+  cash_reserve_pct:         number;
+  max_signals_per_bar:      number;
+  signal_confirmation_bars: number;
+  cooloff_days:             number;
+  // Exit behaviour
+  breakeven_trail_enabled: boolean;
+  max_holding_days:        number;
+  partial_tp_pct:          number;
+  // EV filter
+  min_ev_dollars: number;
+  min_rr_ratio:   number;
+  min_p_tp:       number;
+  // Position sizing
+  sizing_method:  string;
+  kelly_fraction: number;
+  // Correlation controls
+  correlation_penalty_enabled: boolean;
+  correlation_threshold:       number;
+  correlation_penalty_factor:  number;
+  // Walk-forward
+  n_folds:                     number;
+  test_window_days:            number;
+  purge_days:                  number;
+  optimise_mc_params_on_train: boolean;
+  sl_quantile_grid:            number[];
+  tp_quantile_grid:            number[];
+  // Fill price
+  fill_price: string;
+  // Misc
+  seed_base:         number;
+  commission_bps:    number;
+  sl_commission_bps: number;
+}
+
+export interface MCTradeDetail {
+  ticker:       string;
+  entry_date:   string;
+  sl_raw:       number | null;
+  sl_applied:   number | null;
+  tp:           number | null;
+  rr:           number | null;
+  p_tp:         number | null;
+  ev:           number | null;
+  sigma_annual: number | null;
+  exit_reason:  string;
+}
+
+export interface MCAggregateStats {
+  mean_p_tp:                  number | null;
+  fraction_filtered_ev:       number | null;
+  fraction_filtered_rr:       number | null;
+  fraction_filtered_p_tp:     number | null;
+  mean_sigma_at_entry:        number | null;
+  breakeven_trail_activations: number;
+  total_candidates_evaluated: number;
+  total_trades_entered:       number;
+}
+
+export interface MCBacktestResponse extends BacktestResponse {
+  mc_trade_details:   MCTradeDetail[];
+  mc_aggregate_stats: MCAggregateStats;
 }

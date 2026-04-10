@@ -249,3 +249,38 @@ class UniverseInfo(BaseModel):
 
 class UniversesResponse(BaseModel):
     universes: list[UniverseInfo]
+
+
+# ─────────────────────────────────────────────────────────────
+# HMM REGIME
+# ─────────────────────────────────────────────────────────────
+
+class HMMRegimeStat(BaseModel):
+    frequency_pct:    float
+    avg_duration_days: float
+    ann_return_pct:   float
+    ann_vol_pct:      float
+
+
+class HMMRegimePoint(BaseModel):
+    date:       str
+    regime:     str
+    p_bull:     float
+    p_sideways: float
+    p_bear:     float
+    p_crash:    float
+    close:      Optional[float] = None
+
+
+class HMMRegimeResponse(BaseModel):
+    ticker:          str
+    current_regime:  str
+    current_p_bull:  float
+    current_p_side:  float
+    current_p_bear:  float
+    current_p_crash: float
+    train_end:       str
+    test_start:      str
+    n_observations:  int
+    regime_stats:    dict[str, HMMRegimeStat]
+    series:          list[HMMRegimePoint]

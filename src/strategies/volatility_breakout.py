@@ -25,8 +25,10 @@ class VolatilityBreakoutStrategy(TradingStrategy):
         self.atr_multiplier = atr_multiplier
 
     def generate_signals(self, prices: pd.DataFrame, **kwargs) -> pd.DataFrame:
-        high_20 = prices.rolling(self.window, min_periods=self.window).max()
-        atr     = _atr(prices, self.window)
+        # Shift by 1 so bar T signal uses the highest close of the previous 20 bars,
+        # not the current bar's close (which would always be ≤ its own rolling max).
+        high_20 = prices.rolling(self.window, min_periods=self.window).max().shift(1)
+        atr     = _atr(prices, self.window).shift(1)
 
         signals = pd.DataFrame(0.0, index=prices.index, columns=prices.columns)
         signals[prices > high_20 + self.atr_multiplier * atr] = 1.0

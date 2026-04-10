@@ -15,7 +15,12 @@
       "Bash('C:\\\\Users\\\\TRNTTI\\\\AppData\\\\Local\\\\pypoetry\\\\Cache\\\\virtualenvs\\\\ai-hedge-fund-MvdIjt0C-py3.11\\\\Scripts\\\\python.exe' -c ':*)",
       "Bash(python -m pytest src/hmm_regime/tests/test_no_lookahead.py -v --tb=short)",
       "Bash(node -e \"const r = require\\('/c/Users/TRNTTI/Documents/alphas/app/frontend/node_modules/recharts'\\); console.log\\('ReferenceArea:', !!r.ReferenceArea, 'ComposedChart:', !!r.ComposedChart\\);\")",
-      "Bash(node -e \"const r = require\\('C:/Users/TRNTTI/Documents/alphas/app/frontend/node_modules/recharts'\\); console.log\\('ReferenceArea:', !!r.ReferenceArea, 'ComposedChart:', !!r.ComposedChart\\);\")"
+      "Bash(node -e \"const r = require\\('C:/Users/TRNTTI/Documents/alphas/app/frontend/node_modules/recharts'\\); console.log\\('ReferenceArea:', !!r.ReferenceArea, 'ComposedChart:', !!r.ComposedChart\\);\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('src/backtesting/mc_engine.py'\\).read\\(\\)\\); print\\('mc_engine.py: OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('src/backtesting/mc_engine.py', encoding='utf-8'\\).read\\(\\)\\); print\\('mc_engine.py: OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app/backend/main.py', encoding='utf-8'\\).read\\(\\)\\); print\\('main.py: OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('c:/Users/TRNTTI/Documents/alphas/app/backend/main.py', encoding='utf-8'\\).read\\(\\)\\); print\\('main.py: OK'\\)\")",
+      "Bash(git -C c:/Users/TRNTTI/Documents/alphas log --oneline -10)"
     ]
   }
 }

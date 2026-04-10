@@ -13,6 +13,7 @@ from .ema_cross             import EMACrossStrategy
 from .rsi                   import RSIStrategy
 from .volatility_breakout   import VolatilityBreakoutStrategy
 from .drsi                  import DRSIStrategy
+from .vader                 import VADERStrategy
 
 STRATEGY_MAP: dict = {
     "MomentumStrategy":           MomentumStrategy,
@@ -22,6 +23,7 @@ STRATEGY_MAP: dict = {
     "RSIStrategy":                RSIStrategy,
     "VolatilityBreakoutStrategy": VolatilityBreakoutStrategy,
     "DRSIStrategy":               DRSIStrategy,
+    "VADERStrategy":              VADERStrategy,
 }
 
 __all__ = [
@@ -32,5 +34,6 @@ __all__ = [
     "RSIStrategy",
     "VolatilityBreakoutStrategy",
     "DRSIStrategy",
+    "VADERStrategy",
     "STRATEGY_MAP",
 ]

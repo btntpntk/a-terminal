@@ -94,10 +94,13 @@ def run_backtest(
     # Stop-loss tracking: {ticker: {"entry_price": float, "direction": int}}
     open_positions: dict[str, dict] = {}
 
+    # Tickers blocked from re-entry until their signal drops to 0 after a stop-loss.
+    # Prevents immediate re-entry when signal stays active after being stopped out.
+    stop_blocked: set[str] = set()
+
     # Track last day's prices across folds so fold boundaries don't drop a day's P&L
     prev_prices_global: pd.Series | None = None
 
-    all_test_dates = set()
     weights_rows: list[tuple[pd.Timestamp, dict]] = []
 
     for fold_idx, (tr_s, tr_e, te_s, te_e) in enumerate(folds):
@@ -136,6 +139,19 @@ def run_backtest(
                         today_signals = today_signals.copy()
                     today_signals[ticker] = 0
                     stopped_tickers.add(ticker)
+                    stop_blocked.add(ticker)  # block re-entry until signal resets to 0
+
+            # Lift stop-block for any ticker whose signal has returned to 0 (flat)
+            for ticker in list(stop_blocked):
+                if ticker not in stopped_tickers and today_signals.get(ticker, 0) == 0:
+                    stop_blocked.discard(ticker)
+
+            # Force signal to 0 for still-blocked tickers (signal active but no new activation)
+            for ticker in stop_blocked - stopped_tickers:
+                if today_signals.get(ticker, 0) != 0:
+                    if today_signals is test_signals.iloc[i]:
+                        today_signals = today_signals.copy()
+                    today_signals[ticker] = 0
 
             # ── Compute target weights ────────────────────────────────
             active_signals = today_signals[today_signals != 0].dropna()
@@ -242,7 +258,6 @@ def run_backtest(
 
             portfolio_values.append((date, equity))
             fold_equity_vals.append((date, equity))
-            all_test_dates.add(date)
 
         fold_equity_list.append(
             pd.Series(

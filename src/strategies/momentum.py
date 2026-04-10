@@ -30,8 +30,17 @@ class MomentumStrategy(TradingStrategy):
         for i, date in enumerate(prices.index):
             if date in monthly_dates or i == 0:
                 row = momentum.loc[date].dropna()
-                if len(row) < 5:
+                if len(row) == 0:
                     last_signal = pd.Series(0.0, index=prices.columns)
+                elif len(row) < 5:
+                    # Small universe: go long the top-half by momentum score.
+                    n        = len(row)
+                    top_n    = max(1, n // 2)
+                    ranked   = row.rank(ascending=True)
+                    sig      = pd.Series(0.0, index=prices.columns)
+                    long_tickers = ranked[ranked >= n - top_n + 1].index
+                    sig.loc[long_tickers] = 1.0
+                    last_signal = sig
                 else:
                     n        = len(row)
                     quintile = max(1, n // 5)

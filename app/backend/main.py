@@ -48,6 +48,7 @@ from pipeline import (
     get_universe_info,
 )
 from schemas import (
+    HMMRegimeResponse,
     MacroResponse,
     RankingsResponse,
     RegimeResponse,
@@ -1002,6 +1003,323 @@ async def run_backtest_endpoint(req: BacktestRequest):
         "trade_markers":     trade_markers,
         "positions_chart":   positions_chart,
     })
+
+
+# ─────────────────────────────────────────────────────────────
+# ROUTES — MONTE CARLO INTEGRATED BACKTEST
+# ─────────────────────────────────────────────────────────────
+
+from typing import List as _List
+
+class MCBacktestRequest(_BaseModel):
+    # Strategies
+    buy_strategy:  str   = "MomentumStrategy"
+    sell_strategy: str   = "TP_SL"   # strategy name | "TP_SL" | "BOTH"
+    # Universe / single-ticker mode
+    universe:      str   = "SP500_SAMPLE"
+    # Single-ticker mode: when set, ignores universe and tests one asset.
+    single_ticker:    Optional[str] = None
+    benchmark_ticker: Optional[str] = None
+    # Backtest period
+    backtest_start: str  = "2021-01-01"
+    backtest_end:   str  = "2024-01-01"
+    # Capital & risk
+    initial_capital:      float = 1_000_000.0
+    max_stop_loss_pct:    float = 0.08
+    acceptable_risk_pct:  float = 0.01
+    # MC simulation
+    n_simulations:        int   = 1000
+    holding_days:         int   = 10
+    tp_quantile:          float = 0.80
+    sl_quantile:          float = 0.10
+    shock_distribution:   str   = "student_t"
+    student_t_df:         int   = 6
+    # Volatility estimation
+    vol_lookback_days:    int   = 20
+    vol_method:           str   = "ewma"
+    ewma_halflife_days:   int   = 10
+    vol_floor:            float = 0.10
+    vol_cap:              float = 1.50
+    drift_method:         str   = "zero"
+    # Position & portfolio controls
+    max_open_positions:   int   = 10
+    max_position_pct:     float = 0.15
+    cash_reserve_pct:     float = 0.10
+    max_signals_per_bar:  int   = 5
+    signal_confirmation_bars: int = 1
+    cooloff_days:         int   = 5
+    # Exit behaviour
+    breakeven_trail_enabled: bool  = True
+    max_holding_days:     int   = 20
+    partial_tp_pct:       float = 1.0
+    # EV filter
+    min_ev_dollars:       float = 0.0
+    min_rr_ratio:         float = 1.5
+    min_p_tp:             float = 0.50
+    # Position sizing
+    sizing_method:        str   = "risk_parity_sl"
+    kelly_fraction:       float = 0.25
+    # Correlation controls
+    correlation_penalty_enabled: bool  = True
+    correlation_threshold:       float = 0.70
+    correlation_penalty_factor:  float = 0.50
+    # Walk-forward
+    n_folds:              int   = 4
+    test_window_days:     int   = 63
+    purge_days:           int   = 10
+    optimise_mc_params_on_train: bool = False
+    sl_quantile_grid:     _List[float] = [0.05, 0.10, 0.15]
+    tp_quantile_grid:     _List[float] = [0.75, 0.80, 0.85, 0.90]
+    # Fill price
+    fill_price:           str   = "open_next_day"
+    # Misc
+    seed_base:            int   = 42
+    commission_bps:       float = 10.0
+    sl_commission_bps:    float = 5.0
+
+
+@app.post("/api/backtest/run-mc", tags=["Backtest"])
+async def run_mc_backtest_endpoint(req: MCBacktestRequest):
+    """
+    Run a Monte Carlo integrated walk-forward backtest.
+
+    Uses Monte Carlo path simulation to derive per-trade TP and SL levels.
+    Returns the same equity_curve/benchmark/metrics/trade_log structure as
+    /api/backtest/run, plus mc_trade_details and mc_aggregate_stats.
+    """
+    from src.universes import UNIVERSE_MAP
+    from src.backtesting.data_loader import load_prices
+    from src.backtesting.mc_engine import MCParams, run_mc_walk_forward
+
+    is_single = bool(req.single_ticker)
+
+    if not is_single and req.universe not in UNIVERSE_MAP:
+        raise HTTPException(status_code=400, detail=f"Unknown universe '{req.universe}'. Valid: {list(UNIVERSE_MAP)}")
+
+    universe = None if is_single else UNIVERSE_MAP[req.universe]
+
+    def _execute():
+        # Load prices: extra years for vol warmup before backtest_start
+        import pandas as _pd
+        bs = _pd.Timestamp(req.backtest_start)
+        be = _pd.Timestamp(req.backtest_end)
+        period_years = max(2, int((be - bs).days / 365) + 2)
+
+        if is_single:
+            ticker = req.single_ticker.strip().upper()
+            # Auto-infer benchmark if not provided (reuse normal-mode logic)
+            bm_ticker = req.benchmark_ticker or (
+                "^SET.BK" if ticker.endswith(".BK") else
+                "BTC-USD" if ticker.endswith("-USD") else
+                "SPY"
+            )
+            prices = load_prices(
+                tickers=[ticker],
+                period_years=period_years,
+                extra_tickers=[bm_ticker],
+            )
+            if ticker not in prices.columns:
+                raise ValueError(f"No price data for '{ticker}'.")
+            asset_prices = prices[[ticker]].dropna(how="all")
+            benchmark_prices = prices[bm_ticker] if bm_ticker in prices.columns else asset_prices.iloc[:, 0]
+            tickers_list = [ticker]
+        else:
+            bm_ticker = universe.benchmark_ticker
+            prices = load_prices(
+                tickers=universe.tickers,
+                period_years=period_years,
+                extra_tickers=[bm_ticker],
+            )
+            if bm_ticker in prices.columns:
+                benchmark_prices = prices[bm_ticker]
+                asset_prices = prices[universe.tickers].dropna(how="all")
+            else:
+                asset_prices = prices[universe.tickers].dropna(how="all")
+                benchmark_prices = asset_prices.iloc[:, 0]
+            tickers_list = universe.tickers
+
+        params = MCParams(
+            buy_strategy=req.buy_strategy,
+            sell_strategy=req.sell_strategy,
+            tickers=tickers_list,
+            benchmark_ticker=bm_ticker,
+            backtest_start=_pd.Timestamp(req.backtest_start),
+            backtest_end=_pd.Timestamp(req.backtest_end),
+            initial_capital=req.initial_capital,
+            max_stop_loss_pct=req.max_stop_loss_pct,
+            acceptable_risk_pct=req.acceptable_risk_pct,
+            n_simulations=req.n_simulations,
+            holding_days=req.holding_days,
+            tp_quantile=req.tp_quantile,
+            sl_quantile=req.sl_quantile,
+            shock_distribution=req.shock_distribution,
+            student_t_df=req.student_t_df,
+            vol_lookback_days=req.vol_lookback_days,
+            vol_method=req.vol_method,
+            ewma_halflife_days=req.ewma_halflife_days,
+            vol_floor=req.vol_floor,
+            vol_cap=req.vol_cap,
+            drift_method=req.drift_method,
+            max_open_positions=req.max_open_positions,
+            max_position_pct=req.max_position_pct,
+            cash_reserve_pct=req.cash_reserve_pct,
+            max_signals_per_bar=req.max_signals_per_bar,
+            signal_confirmation_bars=req.signal_confirmation_bars,
+            cooloff_days=req.cooloff_days,
+            breakeven_trail_enabled=req.breakeven_trail_enabled,
+            max_holding_days=req.max_holding_days,
+            partial_tp_pct=req.partial_tp_pct,
+            min_ev_dollars=req.min_ev_dollars,
+            min_rr_ratio=req.min_rr_ratio,
+            min_p_tp=req.min_p_tp,
+            sizing_method=req.sizing_method,
+            kelly_fraction=req.kelly_fraction,
+            correlation_penalty_enabled=req.correlation_penalty_enabled,
+            correlation_threshold=req.correlation_threshold,
+            correlation_penalty_factor=req.correlation_penalty_factor,
+            n_folds=req.n_folds,
+            test_window_days=req.test_window_days,
+            purge_days=req.purge_days,
+            optimise_mc_params_on_train=req.optimise_mc_params_on_train,
+            sl_quantile_grid=list(req.sl_quantile_grid),
+            tp_quantile_grid=list(req.tp_quantile_grid),
+            fill_price=req.fill_price,
+            seed_base=req.seed_base,
+            commission_bps=req.commission_bps,
+            sl_commission_bps=req.sl_commission_bps,
+        )
+
+        return run_mc_walk_forward(asset_prices, benchmark_prices, params)
+
+    try:
+        result = await asyncio.to_thread(_execute)
+    except AssertionError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"MC backtest failed: {e}")
+
+    # Serialize — same structure as /api/backtest/run
+    equity_dict    = {d.strftime("%Y-%m-%d"): round(v, 2) for d, v in result.equity_curve.items() if not math.isnan(v)}
+    benchmark_dict = {d.strftime("%Y-%m-%d"): round(v, 2) for d, v in result.benchmark_curve.items() if not math.isnan(v)}
+
+    fold_boundaries: list[str] = []
+    for s in result.fold_returns:
+        if len(s) > 0:
+            fold_boundaries.append(s.index[0].strftime("%Y-%m-%d"))
+
+    trade_log_summary = {
+        "total_trades": result.metrics.get("total_trades", 0),
+        "long_trades":  result.metrics.get("long_trades", 0),
+        "short_trades": result.metrics.get("short_trades", 0),
+    }
+
+    trade_markers: list[dict] = []
+    trade_log_rows: list[dict] = []
+    if not result.trade_log.empty:
+        for _, row in result.trade_log.iterrows():
+            entry = row.get("entry_date") or row.get("entry_bar")
+            exit_ = row.get("exit_date")  or row.get("exit_bar")
+            if entry is not None and entry == entry:
+                trade_markers.append({"date": str(entry)[:10], "type": "buy"})
+            if exit_ is not None and exit_ == exit_:
+                stopped = bool(row.get("stop_triggered", False))
+                trade_markers.append({"date": str(exit_)[:10], "type": "stop" if stopped else "sell"})
+            trade_log_rows.append({
+                "asset":          row.get("asset", row.get("ticker", "")),
+                "entry_date":     str(row.get("entry_date", row.get("entry_bar", "")))[:10],
+                "exit_date":      str(row.get("exit_date",  row.get("exit_bar", "")))[:10],
+                "entry_price":    round(float(row.get("entry_price", 0) or 0), 4),
+                "exit_price":     round(float(row.get("exit_price",  0) or 0), 4),
+                "return_pct":     round(float(row.get("return_pct",  0) or 0), 6),
+                "pnl":            round(float(row.get("pnl", row.get("pnl_net", 0)) or 0), 2),
+                "balance":        round(float(row.get("equity_at_exit", 0) or 0), 2),
+                "stop_triggered": bool(row.get("stop_triggered", False)),
+                # MC extras
+                "exit_reason":    str(row.get("exit_reason", "")),
+                "mc_sl_raw":      round(float(row.get("mc_sl_raw",    0) or 0), 4),
+                "mc_sl_applied":  round(float(row.get("mc_sl_applied", 0) or 0), 4),
+                "mc_tp":          round(float(row.get("mc_tp",        0) or 0), 4),
+                "rr":             round(float(row.get("rr",           0) or 0), 3),
+                "p_tp":           round(float(row.get("p_tp",         0) or 0), 3),
+                "ev":             round(float(row.get("ev",           0) or 0), 4),
+                "sigma_annual":   round(float(row.get("sigma_annual", 0) or 0), 4),
+                "fold_id":        int(row.get("fold_id", 0) or 0),
+            })
+
+    # Positions chart
+    wh = result.weights_history
+    positions_chart = []
+    if not wh.empty:
+        sample_step = max(1, len(wh) // 150)
+        wh_sampled = wh.iloc[::sample_step]
+        active_cols = [c for c in wh_sampled.columns if (wh_sampled[c].abs() > 1e-4).any()]
+        if active_cols:
+            for date, row in wh_sampled[active_cols].iterrows():
+                entry: dict = {"date": date.strftime("%Y-%m-%d")}
+                entry.update({t: round(float(v), 4) for t, v in row.items()})
+                positions_chart.append(entry)
+
+    # Build buy-and-hold curve for single-ticker mode (rebased to initial_capital)
+    buyhold_dict = None
+    if is_single and result.buyhold_curve is not None:
+        buyhold_dict = {d.strftime("%Y-%m-%d"): round(v, 2) for d, v in result.buyhold_curve.items() if not math.isnan(v)}
+
+    return _clean_floats({
+        "equity_curve":       equity_dict,
+        "benchmark_curve":    benchmark_dict,
+        "buyhold_curve":      buyhold_dict,
+        "fold_boundaries":    fold_boundaries,
+        "metrics":            result.metrics,
+        "trade_log":          trade_log_rows,
+        "trade_log_summary":  trade_log_summary,
+        "trade_markers":      trade_markers,
+        "positions_chart":    positions_chart,
+        # MC extras
+        "mc_trade_details":   result.mc_trade_details,
+        "mc_aggregate_stats": result.mc_aggregate_stats,
+    })
+
+
+# ─────────────────────────────────────────────────────────────
+# ROUTES — HMM REGIME
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/api/hmm-regime", response_model=HMMRegimeResponse, tags=["HMM"])
+async def get_hmm_regime(
+    ticker:     str  = Query("^SET.BK"),
+    start:      str  = Query("2000-01-01"),
+    train_end:  str  = Query(None),
+    test_start: str  = Query(None),
+    refresh:    bool = Query(False),
+):
+    from src.hmm_regime import run_hmm_pipeline
+
+    if train_end is None:
+        y = int(start[:4]) + 10
+        train_end = f"{y}{start[4:]}"
+    if test_start is None:
+        test_start = train_end
+
+    cache_key = f"hmm:{ticker}:{start}:{train_end}"
+    if not refresh:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+    try:
+        data = await asyncio.to_thread(
+            run_hmm_pipeline, ticker, start, train_end, test_start
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"HMM pipeline failed: {e}")
+
+    result = HMMRegimeResponse(**data)
+    cache.set(cache_key, result, ttl_seconds=21 * 24 * 3600)
+    return result
 
 
 # ─────────────────────────────────────────────────────────────

@@ -32,9 +32,12 @@ class RSIStrategy(TradingStrategy):
     def generate_signals(self, prices: pd.DataFrame, **kwargs) -> pd.DataFrame:
         rsi = _rsi(prices, self.period)
 
-        signals = pd.DataFrame(0.0, index=prices.index, columns=prices.columns)
-        signals[rsi < self.oversold] = 1.0
-        # Exit (go flat) when overbought — signal drops to 0, no short
-        signals[rsi > self.overbought] = 0.0
+        # Build stateful signals column-by-column:
+        # Enter long when RSI crosses below oversold; hold until RSI crosses above overbought.
+        raw = pd.DataFrame(float("nan"), index=prices.index, columns=prices.columns)
+        raw[rsi < self.oversold]  = 1.0   # entry trigger
+        raw[rsi > self.overbought] = 0.0  # exit trigger
+        # Forward-fill so the long position is held between entry and exit bars.
+        signals = raw.ffill().fillna(0.0)
 
-        return signals.fillna(0.0)
+        return signals
