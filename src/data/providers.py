@@ -51,7 +51,7 @@ async def fetch_all_data(ticker: str) -> dict:
     Returns raw ticker objects and processed returns for quantitative analysis.
     """
     stock   = yf.Ticker(ticker)
-    history = stock.history(period="1y")
+    history = stock.history(period="3y")
 
     if history.empty:
         raise ValueError(f"No price history found for ticker: {ticker}")
