@@ -1,0 +1,76 @@
+// ============================================================
+// PIVOT POINT SUPERTREND [SET D-W]  —  FIXED v5.1
+// Based on: LonesomeTheBlue's Pivot Point Supertrend
+// Adapted for SET Daily/Weekly Swing Trading
+// Fixes: (1) float-as-bool → not na(ph)  (2) trend switch cleaner
+// ============================================================
+//@version=5
+indicator("Pivot Point Supertrend [SET]", overlay=true, max_lines_count=500, max_labels_count=500)
+
+// ── Inputs ──────────────────────────────────────────────────
+prd   = input.int(2,   "Pivot Period",     minval=1,   maxval=50)
+Factor= input.float(3.0,"ATR Multiplier",  minval=0.5, step=0.1)
+Pd    = input.int(10,  "ATR Period",       minval=1,   maxval=50)
+showSignals = input.bool(true, "Show Buy/Sell Signals")
+
+// ── Pivot Detection ─────────────────────────────────────────
+float ph = ta.pivothigh(high, prd, prd)
+float pl = ta.pivotlow(low,  prd, prd)
+
+// ── Anchor: store last confirmed pivot ──────────────────────
+var float UP    = na
+var float DN    = na
+var float TUp   = na
+var float TDown = na
+var int   Trend = 1                           // ✅ fix: init = 1 (not na)
+
+float atr = ta.atr(Pd)
+
+UP := not na(ph) ? ph : nz(UP[1])             // ✅ fix: explicit na check
+DN := not na(pl) ? pl : nz(DN[1])
+
+float Pivot = na(UP) or na(DN) ? close : (UP + DN) / 2
+
+// ── Dynamic Bands (pivot-anchored ATR) ──────────────────────
+TUp   := na(TUp[1])   ? Pivot - Factor * atr :
+         Pivot > TUp[1] ? math.max(Pivot - Factor * atr, TUp[1]) :
+                           Pivot - Factor * atr
+
+TDown := na(TDown[1]) ? Pivot + Factor * atr :
+         Pivot < TDown[1] ? math.min(Pivot + Factor * atr, TDown[1]) :
+                             Pivot + Factor * atr
+
+// ── Trend State Machine ──────────────────────────────────────
+Trend := Pivot > TDown[1] ?  1 :
+         Pivot < TUp[1]   ? -1 :
+         nz(Trend[1], 1)
+
+float Sup   = Trend ==  1 ? TUp   : TDown
+float Sdown = Trend == -1 ? TDown : TUp
+
+// ── Plots ────────────────────────────────────────────────────
+plot(Trend ==  1 ? Sup   : na, "Up Trend",   color.new(color.lime, 0), 2)
+plot(Trend == -1 ? Sdown : na, "Down Trend", color.new(color.red,  0), 2)
+
+// ── Signals  (✅ fix: use state transitions directly) ────────
+bool Buy  = Trend ==  1 and Trend[1] == -1
+bool Sell = Trend == -1 and Trend[1] ==  1
+
+plotshape(showSignals and Buy,  "Buy",  shape.triangleup,   location.belowbar, color.lime, size=size.small)
+plotshape(showSignals and Sell, "Sell", shape.triangledown, location.abovebar, color.red,  size=size.small)
+
+// ── Dashboard ─────────────────────────────────────────────────
+var table dash = table.new(position.top_right, 2, 3, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.gray)
+if barstate.islast
+    string trendStr = Trend == 1 ? "📈 LONG" : "📉 SHORT"
+    color  trendCol = Trend == 1 ? color.lime : color.red
+    table.cell(dash, 0, 0, "PP Supertrend", text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 0, trendStr,        text_color=trendCol,     text_size=size.small)
+    table.cell(dash, 0, 1, "Support",       text_color=color.silver, text_size=size.tiny)
+    table.cell(dash, 1, 1, str.tostring(math.round(Sup,2)),   text_color=color.lime, text_size=size.tiny)
+    table.cell(dash, 0, 2, "Resistance",    text_color=color.silver, text_size=size.tiny)
+    table.cell(dash, 1, 2, str.tostring(math.round(Sdown,2)), text_color=color.red,  text_size=size.tiny)
+
+// ── Alerts ───────────────────────────────────────────────────
+alertcondition(Buy,  "PP Supertrend BUY",  "🟢 PP Supertrend: Buy Signal")
+alertcondition(Sell, "PP Supertrend SELL", "🔴 PP Supertrend: Sell Signal")

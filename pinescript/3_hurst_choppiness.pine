@@ -1,0 +1,100 @@
+// ============================================================
+// HURST EXPONENT + CHOPPINESS INDEX [Regime Detector]  —  FIXED v5.1
+// Method: R/S (Rescaled Range) Analysis
+// Fixes: (1) ta.ema na-safe  (2) chopNorm guard
+// ============================================================
+//@version=5
+indicator("Hurst + Choppiness [SET Regime]", shorttitle="HURST+CHOP", format=format.price, precision=3)
+
+// ── Inputs ──────────────────────────────────────────────────
+hurstLen  = input.int(100, "Hurst RS Length",  minval=20, maxval=500, group="Hurst Exponent")
+smoothLen = input.int(5,   "Smooth (EMA)",     minval=1,  maxval=20,  group="Hurst Exponent")
+chopLen   = input.int(14,  "Choppiness Length",minval=2,  maxval=100, group="Choppiness Index")
+showChop  = input.bool(true, "Show Choppiness", group="Choppiness Index")
+chopHigh  = input.float(61.8, "Chop Upper (Sideways)", group="Choppiness Index")
+chopLow   = input.float(38.2, "Chop Lower (Trending)", group="Choppiness Index")
+
+// ── HURST EXPONENT (R/S Method) ──────────────────────────────
+var float hurstPersist = 0.5   // ✅ fix: persistent for warm-up period
+
+float hurst = na
+if bar_index >= hurstLen
+    float mean = ta.sma(close, hurstLen)
+
+    float maxCum  = -1e10
+    float minCum  =  1e10
+    float cumDev  = 0.0
+    float sumSq   = 0.0
+
+    for i = 0 to hurstLen - 1
+        cumDev  += close[i] - mean
+        maxCum  := math.max(maxCum, cumDev)
+        minCum  := math.min(minCum, cumDev)
+        sumSq   += math.pow(close[i] - mean, 2)
+
+    float R = maxCum - minCum
+    float S = math.sqrt(sumSq / hurstLen)
+
+    if R > 0 and S > 0
+        hurst := math.log(R / S) / math.log(hurstLen)
+        hurstPersist := hurst
+
+// ✅ fix: ส่งค่าที่ "smoothed หลัง warm-up" เข้าไปใน ema
+float hurstSmooth = ta.ema(nz(hurst, hurstPersist), smoothLen)
+
+// ── CHOPPINESS INDEX ─────────────────────────────────────────
+float atrSum  = math.sum(ta.atr(1), chopLen)
+float hlRange = ta.highest(high, chopLen) - ta.lowest(low, chopLen)
+float chop    = hlRange > 0 ? 100 * math.log10(atrSum / hlRange) / math.log10(chopLen) : 50
+
+// ── Regime Classification ────────────────────────────────────
+bool isTrending = hurstSmooth > 0.55 and chop < chopHigh
+bool isMeanRev  = hurstSmooth < 0.45 and chop > chopLow
+bool isRandom   = not isTrending and not isMeanRev
+
+string regimeStr = isTrending ? "📈 TRENDING"     :
+                   isMeanRev  ? "↔️ MEAN-REVERT"  :
+                                "⚠️ UNCLEAR"
+color  regimeCol = isTrending ? color.lime :
+                   isMeanRev  ? color.red  :
+                                color.yellow
+string toolkitStr= isTrending ? "→ Supertrend / Ichimoku"  :
+                   isMeanRev  ? "→ LaRSI / WilliamsVixFix" :
+                                "→ Wait / Reduce position"
+
+// ── Reference Lines ──────────────────────────────────────────
+hline(0.55, "Trending Threshold", color.new(color.lime, 40), hline.style_dashed)
+hline(0.50, "Random Walk (0.5)",  color.new(color.gray, 50), hline.style_dotted)
+hline(0.45, "MR Threshold",       color.new(color.red,  40), hline.style_dashed)
+
+// ── Plots ─────────────────────────────────────────────────────
+color hurstCol = isTrending ? color.lime : isMeanRev ? color.red : color.yellow
+plot(hurstSmooth, "Hurst Smooth", hurstCol, 2)
+plot(hurst,       "Hurst Raw",   color.new(hurstCol, 60), 1)
+
+// Choppiness normalized 30-90 → 0-1
+float chopNorm = showChop ? math.max(0.0, math.min(1.0, (chop - 30) / 60)) : na
+plot(chopNorm, "Choppiness (norm)", color.new(color.orange, 40), 1, plot.style_stepline)
+
+bgcolor(isTrending ? color.new(color.lime, 94) :
+        isMeanRev  ? color.new(color.red,  94) : na)
+
+// ── Dashboard ─────────────────────────────────────────────────
+var table dash = table.new(position.top_right, 2, 5,
+     bgcolor=color.new(color.black, 75), border_width=1, border_color=color.gray)
+if barstate.islast
+    table.cell(dash, 0, 0, "Hurst",    text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 0, str.tostring(math.round(hurstSmooth, 3)), text_color=hurstCol, text_size=size.small)
+    table.cell(dash, 0, 1, "Chop",     text_color=color.silver, text_size=size.small)
+    color chopCol = chop > chopHigh ? color.red : chop < chopLow ? color.lime : color.yellow
+    table.cell(dash, 1, 1, str.tostring(math.round(chop,1)), text_color=chopCol, text_size=size.small)
+    table.cell(dash, 0, 2, "Regime",   text_color=color.silver, text_size=size.small)
+    table.cell(dash, 1, 2, regimeStr,  text_color=regimeCol,    text_size=size.small)
+    table.cell(dash, 0, 3, "Toolkit",  text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 3, toolkitStr, text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 0, 4, "Bars",     text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 4, str.tostring(hurstLen) + "d RS", text_color=color.gray, text_size=size.tiny)
+
+// ── Alerts ───────────────────────────────────────────────────
+alertcondition(ta.crossover(hurstSmooth,  0.55), "Regime→Trending",   "📈 Hurst: Regime shift to TRENDING")
+alertcondition(ta.crossunder(hurstSmooth, 0.45), "Regime→MeanRevert", "↔️ Hurst: Regime shift to MEAN-REVERT")

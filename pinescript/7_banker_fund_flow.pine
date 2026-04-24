@@ -1,0 +1,116 @@
+// ============================================================
+// BANKER FUND FLOW [5-Phase State Machine]  —  FIXED v5.1
+// Inspired by: blackcat1402 L3 Banker Fund Flow Trend Oscillator
+// Fixes: (1) REBOUND phase reachable — reorder checks
+//        (2) guard stdev == 0 (flat market)
+// ============================================================
+//@version=5
+indicator("Banker Fund Flow [SET 5-Phase]", shorttitle="BFF", format=format.price, precision=3)
+
+// ── Inputs ──────────────────────────────────────────────────
+fastLen   = input.int(5,  "Fast EMA",      minval=2,  maxval=20)
+slowLen   = input.int(20, "Slow EMA",      minval=10, maxval=60)
+signalLen = input.int(9,  "Signal EMA",    minval=3,  maxval=30)
+rocLen    = input.int(3,  "Momentum ROC",  minval=1,  maxval=10)
+threshUp  = input.float(0.002, "Entry threshold (up)",  minval=0.0001, step=0.0001, format=format.percent)
+threshDn  = input.float(0.002, "Exit threshold (down)", minval=0.0001, step=0.0001, format=format.percent)
+
+// ── Core Oscillator (Price-only) ─────────────────────────────
+float src   = hlc3
+float ema_f = ta.ema(src, fastLen)
+float ema_s = ta.ema(src, slowLen)
+float diff  = ema_f - ema_s
+float sig   = ta.ema(diff, signalLen)
+float hist  = diff - sig
+
+// ✅ fix: guard stdev == 0
+float sdev = ta.stdev(src, slowLen)
+float denom = sdev > 0 ? sdev : 1e-10
+float diffNorm = diff / denom
+float sigNorm  = sig  / denom
+float histNorm = hist / denom
+
+// Momentum
+float mom       = ta.roc(ema_f, rocLen)
+float momSmooth = ta.ema(mom, 3)
+
+// ── State conditions ─────────────────────────────────────────
+bool cross_up     = ta.crossover(diffNorm,  sigNorm)
+bool cross_down   = ta.crossunder(diffNorm, sigNorm)
+bool diffAboveSig = diffNorm > sigNorm
+bool histRising   = histNorm > nz(histNorm[1])
+bool momPos       = momSmooth > threshUp
+bool momWeak      = math.abs(momSmooth) < threshUp
+
+// ── 5-Phase State Machine ────────────────────────────────────
+var int phase = 0  // 0=neutral, 1=entry, 2=increase, 3=exit, 4=rebound
+
+// ✅ fix: check REBOUND (4) BEFORE ENTRY (1) เพราะเงื่อนไขซ้อน
+if cross_up and diffNorm < 0 and nz(phase[1]) == 3
+    phase := 4
+else if cross_up and diffNorm < 0
+    phase := 1
+else if diffAboveSig and diffNorm > 0 and histRising and momPos
+    phase := 2
+else if cross_down and nz(diffNorm[1]) > 0
+    phase := 3
+else if momWeak and math.abs(diffNorm) < 0.1
+    phase := 0
+else
+    phase := nz(phase[1], 0)
+
+// ── Phase Colors ─────────────────────────────────────────────
+color phaseColor = phase == 1 ? color.yellow :
+                   phase == 2 ? color.lime    :
+                   phase == 3 ? color.red     :
+                   phase == 4 ? color.aqua    :
+                                color.gray
+
+string phaseStr  = phase == 1 ? "🟡 ENTRY"    :
+                   phase == 2 ? "🟢 INCREASE" :
+                   phase == 3 ? "🔴 EXIT"     :
+                   phase == 4 ? "🔵 REBOUND"  :
+                                "⚪ NEUTRAL"
+
+// ── Plots ─────────────────────────────────────────────────────
+hline(0, "Zero", color.new(color.gray,40), hline.style_dashed)
+hline( 0.5, "High", color.new(color.green,60), hline.style_dotted)
+hline(-0.5, "Low",  color.new(color.red,  60), hline.style_dotted)
+
+plot(histNorm, "BFF Histogram", phaseColor, 1, plot.style_columns)
+plot(diffNorm, "BFF Line",      phaseColor, 2)
+plot(sigNorm,  "Signal",        color.new(color.white,30), 1)
+
+bool buySignal    = phase == 1 and nz(phase[1]) != 1
+bool sellSignal   = phase == 3 and nz(phase[1]) != 3
+bool reboundSig   = phase == 4 and nz(phase[1]) != 4
+
+plotshape(buySignal,  "Entry B",  shape.labelup,   location.bottom, color.yellow, text="B", textcolor=color.black, size=size.small)
+plotshape(sellSignal, "Exit S",   shape.labeldown, location.top,    color.red,    text="S", textcolor=color.white, size=size.small)
+plotshape(reboundSig, "Rebound R",shape.labelup,   location.bottom, color.aqua,   text="R", textcolor=color.black, size=size.tiny)
+
+bgcolor(phase == 1 ? color.new(color.yellow, 92) :
+        phase == 2 ? color.new(color.lime,   95) :
+        phase == 3 ? color.new(color.red,    95) :
+        phase == 4 ? color.new(color.aqua,   95) : na)
+
+// ── Dashboard ─────────────────────────────────────────────────
+var table dash = table.new(position.top_right, 2, 5,
+     bgcolor=color.new(color.black,75), border_width=1, border_color=color.gray)
+if barstate.islast
+    table.cell(dash, 0, 0, "BFF Phase",   text_color=color.white,  text_size=size.small)
+    table.cell(dash, 1, 0, phaseStr,      text_color=phaseColor,   text_size=size.small)
+    table.cell(dash, 0, 1, "Diff vs Sig", text_color=color.silver, text_size=size.tiny)
+    table.cell(dash, 1, 1, str.tostring(math.round(diffNorm,3)), text_color=diffNorm>0?color.lime:color.red, text_size=size.tiny)
+    table.cell(dash, 0, 2, "Momentum",    text_color=color.silver, text_size=size.tiny)
+    table.cell(dash, 1, 2, str.tostring(math.round(momSmooth,4)), text_color=momPos?color.lime:color.gray, text_size=size.tiny)
+    table.cell(dash, 0, 3, "Histogram",   text_color=color.silver, text_size=size.tiny)
+    table.cell(dash, 1, 3, str.tostring(math.round(histNorm,3)), text_color=histRising?color.lime:color.red, text_size=size.tiny)
+    table.cell(dash, 0, 4, "⚠️ Note",     text_color=color.orange, text_size=size.tiny)
+    table.cell(dash, 1, 4, "Price-only",  text_color=color.orange, text_size=size.tiny)
+
+// ── Alerts ───────────────────────────────────────────────────
+alertcondition(buySignal,  "BFF Entry Phase", "🟡 Banker Fund Flow: ENTRY Phase")
+alertcondition(sellSignal, "BFF Exit Phase",  "🔴 Banker Fund Flow: EXIT Phase")
+alertcondition(phase == 2 and nz(phase[1]) != 2, "BFF Increase", "🟢 BFF: INCREASE Phase")
+alertcondition(reboundSig, "BFF Rebound",  "🔵 BFF: REBOUND Phase")

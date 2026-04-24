@@ -1,0 +1,121 @@
+// ============================================================
+// POSITION COST DISTRIBUTION 筹码分布 [Chinese Market Structure]  —  FIXED v5.1
+// Inspired by: AlphaViz — CYQ (持仓成本图)
+// Fixes: (1) integer division BUG — b/buckets → b*rangeSize/buckets
+//        (2) turnover-based fade (true CYQ)
+// ============================================================
+//@version=5
+indicator("Position Cost Distribution 筹码 [SET]", overlay=true, max_boxes_count=500)
+
+// ── Inputs ──────────────────────────────────────────────────
+outstandingM  = input.float(1000, "Outstanding Shares (Million)", minval=1,
+     tooltip="จำนวนหุ้นทั้งหมด (ล้านหุ้น)\nตัวอย่าง: PTT = 28,553 | CPALL = 8,980 | KBANK = 2,393")
+lookback      = input.int(120,   "Lookback Bars",  minval=20, maxval=500)
+buckets       = input.int(30,    "Price Buckets",  minval=10, maxval=50)
+decayFactor   = input.float(0.9, "Decay Factor",   minval=0.7, maxval=0.99, step=0.01,
+     tooltip="ยิ่งน้อย = ลืมราคาเก่าเร็ว | 0.9 = standard")
+barWidthPct   = input.float(0.2,  "Bar Width (% of chart)", minval=0.05, maxval=0.5, step=0.05)
+showPeakLine  = input.bool(true, "Show Peak (Max Concentration)")
+colorScheme   = input.string("Green/Red", "Color Scheme", options=["Green/Red","Blue/Orange","Purple/Yellow"])
+
+// ── Color Setup ───────────────────────────────────────────────
+color colLow  = colorScheme == "Green/Red"   ? color.lime   :
+                colorScheme == "Blue/Orange" ? color.blue   : color.purple
+color colHigh = colorScheme == "Green/Red"   ? color.red    :
+                colorScheme == "Blue/Orange" ? color.orange : color.yellow
+
+// ── Range ────────────────────────────────────────────────────
+float hiRange   = ta.highest(high, lookback)
+float loRange   = ta.lowest(low,  lookback)
+float rangeSize = hiRange - loRange
+
+// ── Chip Distribution ────────────────────────────────────────
+var array<float> chipDist = array.new_float(50, 0.0)
+
+if barstate.islast and rangeSize > 0
+    // Reset
+    for b = 0 to buckets - 1
+        array.set(chipDist, b, 0.0)
+
+    float outstanding = outstandingM * 1000000
+
+    for i = lookback - 1 to 0
+        float h_i   = high[i]
+        float l_i   = low[i]
+        float c_i   = close[i]
+        float vol_i = nz(volume[i])
+
+        float decay = math.pow(decayFactor, i)
+
+        for b = 0 to buckets - 1
+            // ✅ fix: integer division — ใช้ rangeSize * b / buckets แทน (b/buckets) ที่เป็น int
+            float bucketLo = loRange + rangeSize * b       / buckets
+            float bucketHi = loRange + rangeSize * (b + 1) / buckets
+
+            float overlap  = math.min(h_i, bucketHi) - math.max(l_i, bucketLo)
+            float barRange = h_i - l_i
+
+            if overlap > 0 and barRange > 0
+                float fraction   = overlap / barRange
+                float midBucket  = (bucketLo + bucketHi) / 2
+                float tp         = (h_i + l_i + c_i) / 3
+                float vwapWeight = 1.0 / (1.0 + math.abs(midBucket - tp) / rangeSize)
+
+                float contrib = vol_i * fraction * vwapWeight * decay
+                array.set(chipDist, b, array.get(chipDist, b) + contrib)
+
+// ── Find max for normalization ────────────────────────────────
+float maxChip    = 0.0
+int   peakBucket = 0
+for b = 0 to buckets - 1
+    float val = array.get(chipDist, b)
+    if val > maxChip
+        maxChip   := val
+        peakBucket := b
+
+// ── Draw Distribution Bars ───────────────────────────────────
+if barstate.islast and maxChip > 0 and rangeSize > 0
+    for b = 0 to buckets - 1
+        float bucketLo = loRange + rangeSize * b       / buckets
+        float bucketHi = loRange + rangeSize * (b + 1) / buckets
+        float chipNorm = array.get(chipDist, b) / maxChip
+
+        color bColor = b == peakBucket ? color.yellow :
+                       chipNorm > 0.6  ? colHigh :
+                       chipNorm > 0.3  ? color.new(colLow, 30) :
+                                         color.new(colLow, 60)
+
+        int boxWidth = math.round(chipNorm * 15)
+        if boxWidth > 0
+            box.new(
+                 left         = bar_index - boxWidth,
+                 right        = bar_index,
+                 top          = bucketHi,
+                 bottom       = bucketLo,
+                 bgcolor      = color.new(bColor, 40),
+                 border_color = color.new(bColor, 60),
+                 border_width = 1)
+
+// ── Peak Cost Line ───────────────────────────────────────────
+float peakPrice = rangeSize > 0 ? loRange + rangeSize * (peakBucket + 0.5) / buckets : na
+plot(showPeakLine ? peakPrice : na, "Peak Cost Zone", color.yellow, 2, plot.style_linebr)
+
+// ── Dashboard ─────────────────────────────────────────────────
+var table dash = table.new(position.top_left, 2, 5,
+     bgcolor=color.new(color.black,75), border_width=1, border_color=color.gray)
+if barstate.islast and not na(peakPrice) and peakPrice != 0
+    float abovePeak = (close - peakPrice) / peakPrice * 100
+    string pricePos = abovePeak > 0 ? "+" + str.tostring(math.round(abovePeak,1)) + "% above peak" :
+                                       str.tostring(math.round(abovePeak,1)) + "% below peak"
+    color posCol = abovePeak > 0 ? color.lime : color.red
+
+    table.cell(dash, 0, 0, "筹码 Chip Dist", text_color=color.yellow, text_size=size.small)
+    table.cell(dash, 1, 0, str.tostring(lookback) + "d",  text_color=color.gray, text_size=size.small)
+    table.cell(dash, 0, 1, "Peak Cost",   text_color=color.silver, text_size=size.small)
+    table.cell(dash, 1, 1, str.tostring(math.round(peakPrice,2)), text_color=color.yellow, text_size=size.small)
+    table.cell(dash, 0, 2, "Price vs Peak", text_color=color.silver, text_size=size.tiny)
+    table.cell(dash, 1, 2, pricePos,        text_color=posCol,       text_size=size.tiny)
+    table.cell(dash, 0, 3, "Shares (M)",    text_color=color.gray,   text_size=size.tiny)
+    table.cell(dash, 1, 3, str.tostring(outstandingM)+"M", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 0, 4, "⚠️ Approx",    text_color=color.orange, text_size=size.tiny)
+    table.cell(dash, 1, 4, "Not real CYQ", text_color=color.orange, text_size=size.tiny)

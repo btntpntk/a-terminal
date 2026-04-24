@@ -1,0 +1,108 @@
+// ============================================================
+// CHANDELIER EXIT + ATR POSITION SIZER [SET Risk Layer]  —  FIXED v5.1
+// Chandelier Exit: Alex Orekhov (everget) — open-source
+// Position Size: DoctaBot style — adapted for SET (no short)
+// Fixes: minor hygiene only (no compile blocker in original)
+// ============================================================
+//@version=5
+indicator("Chandelier Exit + Sizer [SET]", overlay=true)
+
+// ── Chandelier Exit Inputs ───────────────────────────────────
+grpCE  = "Chandelier Exit"
+length = input.int(22,    "ATR Period",         minval=1,  group=grpCE)
+mult   = input.float(3.0, "ATR Multiplier",     minval=0.1,group=grpCE, step=0.1)
+useClose   = input.bool(true,"Use Close (vs High/Low)", group=grpCE,
+     tooltip="true = conservative (ใช้ Close) | false = aggressive (ใช้ High/Low)")
+showLabels = input.bool(true, "Show Direction Labels", group=grpCE)
+
+// ── SET Circuit Breaker Filter ────────────────────────────────
+grpSET = "SET Specific"
+filterCeiling  = input.bool(true, "Filter ceiling/floor 30% bars", group=grpSET,
+     tooltip="ไม่นับ ATR วันที่ราคาเปลี่ยน ≥ 25% เพื่อกันบิดเบือน")
+ceilingThresh  = input.float(0.25, "Ceiling/Floor threshold", minval=0.10, maxval=0.30, step=0.01, group=grpSET)
+
+// ── Position Sizer Inputs ────────────────────────────────────
+grpPS        = "Position Sizer"
+accountSize  = input.float(1000000, "Account Size (THB)", minval=10000,   group=grpPS)
+riskPct      = input.float(1.0,     "Risk per Trade (%)", minval=0.1, maxval=5.0, step=0.1, group=grpPS)
+atrMultStop  = input.float(2.5,     "Stop = ATR × mult",  minval=1.0, step=0.1, group=grpPS)
+
+// ── ATR with ceiling filter ───────────────────────────────────
+float rawAtr       = ta.atr(1)
+float dailyChange  = math.abs(close / nz(close[1], close) - 1)
+float filteredAtr  = (filterCeiling and dailyChange >= ceilingThresh) ? nz(rawAtr[1], rawAtr) : rawAtr
+float smoothAtr    = ta.rma(filteredAtr, length)
+float atrFull      = mult * smoothAtr
+
+// ── Highest/Lowest Source ─────────────────────────────────────
+float highSrc = useClose ? ta.highest(close, length) : ta.highest(high, length)
+float lowSrc  = useClose ? ta.lowest(close,  length) : ta.lowest(low,  length)
+
+float longStop  = highSrc - atrFull
+float shortStop = lowSrc  + atrFull
+
+// ── Direction State Machine ───────────────────────────────────
+var int   dir           = 1
+var float longStopPrev  = na
+var float shortStopPrev = na
+
+longStopPrev  := nz(longStop[1],  longStop)
+shortStopPrev := nz(shortStop[1], shortStop)
+
+longStop  := close[1] > longStopPrev  ? math.max(longStop,  longStopPrev)  : longStop
+shortStop := close[1] < shortStopPrev ? math.min(shortStop, shortStopPrev) : shortStop
+
+dir := close > shortStopPrev ?  1 :
+       close < longStopPrev  ? -1 :
+       nz(dir[1], 1)
+
+bool longSwitch  = dir ==  1 and dir[1] == -1
+bool shortSwitch = dir == -1 and dir[1] ==  1
+
+// ── Plots ─────────────────────────────────────────────────────
+plot(dir ==  1 ? longStop  : na, "Long Stop",  color.new(color.lime, 0), 2, plot.style_linebr)
+plot(dir == -1 ? shortStop : na, "Short Stop", color.new(color.red,  0), 2, plot.style_linebr)
+
+if showLabels
+    if longSwitch
+        label.new(bar_index, longStop,  "▲ Long\n" + str.tostring(math.round(longStop,2)),
+             style=label.style_label_up, color=color.new(color.lime,30),
+             textcolor=color.white, size=size.small)
+    if shortSwitch
+        label.new(bar_index, shortStop, "▼ Exit\n" + str.tostring(math.round(shortStop,2)),
+             style=label.style_label_down, color=color.new(color.red,30),
+             textcolor=color.white, size=size.small)
+
+bgcolor(dir == 1 ? color.new(color.lime,97) : color.new(color.red,97))
+
+// ── Position Sizer Calculation ────────────────────────────────
+float stopDistance = smoothAtr * atrMultStop
+float riskAmount   = accountSize * (riskPct / 100)
+float shares       = stopDistance > 0 ? riskAmount / stopDistance : na
+float positionVal  = shares * close
+float stopPrice    = close - stopDistance
+
+// ── Position Size Table ───────────────────────────────────────
+var table ps = table.new(position.bottom_right, 2, 7,
+     bgcolor=color.new(color.black,75), border_width=1, border_color=color.gray)
+if barstate.islast
+    color  tCol   = dir == 1 ? color.lime : color.red
+    string dirStr = dir == 1 ? "📈 LONG" : "📉 SHORT"
+    table.cell(ps, 0, 0, "Chandelier", bgcolor=color.new(tCol,50), text_color=color.white, text_size=size.small)
+    table.cell(ps, 1, 0, dirStr,       bgcolor=color.new(tCol,50), text_color=color.white, text_size=size.small)
+    table.cell(ps, 0, 1, "Stop Level",  text_color=color.silver, text_size=size.tiny)
+    table.cell(ps, 1, 1, str.tostring(math.round(dir==1?longStop:shortStop,2)), text_color=color.red, text_size=size.tiny)
+    table.cell(ps, 0, 2, "ATR("+str.tostring(length)+")", text_color=color.silver, text_size=size.tiny)
+    table.cell(ps, 1, 2, str.tostring(math.round(smoothAtr,2)), text_color=color.gray, text_size=size.tiny)
+    table.cell(ps, 0, 3, "── SIZER ──", text_color=color.orange, text_size=size.tiny)
+    table.cell(ps, 1, 3, "Risk "+str.tostring(riskPct)+"%", text_color=color.orange, text_size=size.tiny)
+    table.cell(ps, 0, 4, "Stop Price",  text_color=color.silver, text_size=size.tiny)
+    table.cell(ps, 1, 4, str.tostring(math.round(stopPrice,2)), text_color=color.red, text_size=size.tiny)
+    table.cell(ps, 0, 5, "Shares (lots)", text_color=color.silver, text_size=size.small)
+    table.cell(ps, 1, 5, str.tostring(math.round(nz(shares),0)) + " sh", text_color=color.lime, text_size=size.small)
+    table.cell(ps, 0, 6, "Position Value", text_color=color.silver, text_size=size.tiny)
+    table.cell(ps, 1, 6, "฿" + str.tostring(math.round(nz(positionVal)/1000,1)) + "K", text_color=color.yellow, text_size=size.tiny)
+
+// ── Alerts ───────────────────────────────────────────────────
+alertcondition(longSwitch,  "Chandelier BUY",  "🟢 Chandelier: Go LONG")
+alertcondition(shortSwitch, "Chandelier EXIT", "🔴 Chandelier: EXIT")
