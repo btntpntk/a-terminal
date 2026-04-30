@@ -594,7 +594,7 @@ async def get_market_overview():
         for inst in INSTRUMENTS:
             try:
                 tk = yf.Ticker(inst["ticker"])
-                df = tk.history(period="35d", interval="1d", auto_adjust=True)
+                df = tk.history(period="10d", interval="1d", auto_adjust=True)
                 if df.empty or len(df) < 2:
                     rows.append({**inst, "price": None, "change": None, "change_pct": None, "sparkline": []})
                     continue
@@ -603,7 +603,7 @@ async def get_market_overview():
                 prev   = closes[-2]
                 change     = price - prev
                 change_pct = (change / prev * 100) if prev else 0.0
-                sparkline  = [round(v, 4) for v in closes[-30:]]
+                sparkline  = [round(v, 4) for v in closes[-7:]]
                 rows.append({
                     **inst,
                     "price":      round(price, 4),
@@ -1319,6 +1319,151 @@ async def get_hmm_regime(
 
     result = HMMRegimeResponse(**data)
     cache.set(cache_key, result, ttl_seconds=21 * 24 * 3600)
+    return result
+
+
+# ─────────────────────────────────────────────────────────────
+# ROUTES — NEWS SENTIMENT
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/api/news", tags=["News"])
+async def get_news_sentiment(ticker: str = Query(..., description="Ticker symbol, e.g. AAPL or PTT.BK")):
+    """Fetch news for a ticker and classify sentiment via Gemini (15-min cache)."""
+    cache_key = f"news:{ticker.upper()}"
+    if (cached := cache.get(cache_key)) is not None:
+        return cached
+
+    from src.agents.news_sentiment import (
+        Sentiment,
+        _aggregate_signal,
+        _classify_with_gemini,
+        _count_tiers,
+    )
+    from src.agents.news_pipeline import (
+        fetch_gnews_ticker,
+        fetch_macro_articles,
+        fetch_yfinance_articles,
+    )
+
+    macro_seen: set[str] = set()
+    macro_articles = fetch_macro_articles(macro_seen)
+
+    seen: set[str] = set(macro_seen)
+    yf_articles  = fetch_yfinance_articles(ticker, seen)
+    gn_articles  = fetch_gnews_ticker(ticker, seen)
+    all_articles = yf_articles + gn_articles + macro_articles
+
+    sentiments: list[Sentiment] = []
+    for start in range(0, len(all_articles), 20):
+        sentiments.extend(_classify_with_gemini(ticker, all_articles[start : start + 20]))
+
+    overall_signal, confidence = _aggregate_signal(sentiments)
+    tier_counts = _count_tiers(sentiments)
+    high_impact = tier_counts["tier1"] > 0
+
+    articles_out = [
+        {
+            "title":         a["title"],
+            "summary":       a.get("summary", ""),
+            "lang":          a.get("lang", "en"),
+            "ticker_source": a.get("ticker_source", ""),
+            "source":        a.get("source", ""),
+            "published_at":  a.get("published_at"),
+            "sentiment":     s.sentiment,
+            "confidence":    s.confidence,
+            "impact_tier":   s.impact_tier,
+        }
+        for a, s in zip(all_articles, sentiments)
+    ]
+
+    payload: dict = {
+        "ticker":     ticker.upper(),
+        "signal":     overall_signal,
+        "confidence": confidence,
+        "articles":   articles_out,
+        "metrics": {
+            "total_articles":         len(sentiments),
+            "yfinance_articles":      len(yf_articles),
+            "gnews_ticker_articles":  len(gn_articles),
+            "macro_articles":         len(macro_articles),
+            "bullish_articles":       sum(1 for s in sentiments if s.sentiment == "positive"),
+            "bearish_articles":       sum(1 for s in sentiments if s.sentiment == "negative"),
+            "neutral_articles":       sum(1 for s in sentiments if s.sentiment == "neutral"),
+            "impact_tiers":           tier_counts,
+        },
+    }
+    if high_impact:
+        payload["high_impact_alert"] = True
+
+    result = _clean_floats(payload)
+    cache.set(cache_key, result, ttl_seconds=900)
+    return result
+
+
+@app.get("/api/news/headlines", tags=["News"])
+async def get_news_headlines():
+    """
+    Dual-section breaking news feed (5-min cache).
+    Returns top global headlines and top Thai headlines,
+    each sorted by impact tier (T1 first) then newest-first.
+    """
+    import time as _time
+
+    cache_key = "news:headlines"
+    if (cached := cache.get(cache_key)) is not None:
+        return cached
+
+    from src.agents.news_sentiment import Sentiment, _classify_with_gemini
+    from src.agents.news_pipeline import (
+        fetch_global_macro_articles,
+        fetch_thai_macro_articles,
+    )
+
+    _TIER_ORDER = {
+        "Tier 1: Systemic Catalyst": 0,
+        "Tier 2: Sector Shock":      1,
+        "Tier 3: Routine/Noise":     2,
+    }
+
+    def _classify_and_sort(articles: list[dict], context: str, max_items: int = 15) -> list[dict]:
+        sentiments: list[Sentiment] = []
+        for start in range(0, len(articles), 20):
+            sentiments.extend(_classify_with_gemini(context, articles[start : start + 20]))
+        paired = list(zip(articles, sentiments))
+        paired.sort(key=lambda p: (
+            _TIER_ORDER.get(p[1].impact_tier, 2),
+            -(p[0].get("published_at") or 0),
+        ))
+        return [
+            {
+                "title":         a["title"],
+                "summary":       a.get("summary", ""),
+                "lang":          a.get("lang", "en"),
+                "ticker_source": a.get("ticker_source", ""),
+                "source":        a.get("source", ""),
+                "published_at":  a.get("published_at"),
+                "sentiment":     s.sentiment,
+                "confidence":    s.confidence,
+                "impact_tier":   s.impact_tier,
+            }
+            for a, s in paired[:max_items]
+        ]
+
+    global_seen: set[str] = set()
+    thai_seen:   set[str] = set()
+
+    global_articles = fetch_global_macro_articles(global_seen)
+    thai_articles   = fetch_thai_macro_articles(thai_seen)
+
+    global_out = _classify_and_sort(global_articles, "GLOBAL MARKET")
+    thai_out   = _classify_and_sort(thai_articles,   "THAI STOCK MARKET (SET)")
+
+    result = _clean_floats({
+        "global":     global_out,
+        "thai":       thai_out,
+        "fetched_at": int(_time.time()),
+    })
+    cache.set(cache_key, result, ttl_seconds=300)
     return result
 
 

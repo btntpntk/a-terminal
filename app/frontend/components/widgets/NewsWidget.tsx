@@ -1,67 +1,157 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { useState, useEffect, useCallback } from 'react';
+import { api } from '../../lib/api';
+
 interface Props { tabId: string }
 
-interface NewsItem {
-  id: number;
-  headline: string;
+type ImpactTier = 'Tier 1: Systemic Catalyst' | 'Tier 2: Sector Shock' | 'Tier 3: Routine/Noise';
+
+interface Headline {
+  title: string;
+  summary: string;
+  lang: string;
+  ticker_source: string;
   source: string;
-  time: string;
-  sentiment: 'bullish' | 'bearish' | 'neutral';
+  published_at: number | null;
+  sentiment: 'positive' | 'negative' | 'neutral';
+  confidence: number;
+  impact_tier: ImpactTier;
 }
 
-const MOCK_NEWS: NewsItem[] = [
-  {
-    id: 1,
-    headline: "DEMO: Fed holds rates at 4.25–4.50%, signals no cuts before mid-2026.",
-    source: "Reuters",
-    time: "1h ago",
-    sentiment: "neutral",
-  },
-  {
-    id: 2,
-    headline: "DEMO: Thailand's SET Index falls 1.3% as foreign investors post net selling for 8th straight session, led by financials and real estate outflows totalling ฿4.2B.",
-    source: "Bangkok Post",
-    time: "3h ago",
-    sentiment: "bearish",
-  },
-  {
-    id: 3,
-    headline: "DEMO: NVIDIA reports record Q4 revenue of $39.3B, up 78% YoY, beating estimates by $2.1B. Data center surges on AI chip demand. Stock +8% pre-market.",
-    source: "Bloomberg",
-    time: "5h ago",
-    sentiment: "bullish",
-  },
-  {
-    id: 4,
-    headline: "DEMO: Global semiconductor sales rise 18% YoY in February, led by AI/HPC demand. TSMC, Samsung benefit most from sustained order backlog.",
-    source: "Wall Street Journal",
-    time: "6h ago",
-    sentiment: "bullish",
-  },
-];
+interface HeadlinesData {
+  global: Headline[];
+  thai: Headline[];
+  fetched_at: number;
+}
 
-const SENTIMENT_COLOR = { bullish: 'var(--col-buy)', bearish: 'var(--col-red)', neutral: 'var(--col-amber)' };
-const SENTIMENT_LABEL = { bullish: 'BULL', bearish: 'BEAR', neutral: 'NEUT' };
+const REFRESH_MS = 5 * 60 * 1000;
 
-export function NewsWidget({ tabId: _ }: Props) {
+const SENTIMENT_COLOR: Record<string, string> = {
+  positive: 'var(--col-buy)',
+  negative: 'var(--col-red)',
+  neutral:  'var(--col-amber)',
+};
+
+const TIER_META: Record<ImpactTier, { label: string; color: string }> = {
+  'Tier 1: Systemic Catalyst': { label: 'T1', color: 'var(--col-red)' },
+  'Tier 2: Sector Shock':      { label: 'T2', color: 'var(--col-amber)' },
+  'Tier 3: Routine/Noise':     { label: 'T3', color: 'var(--col-muted, #777)' },
+};
+
+function timeAgo(ts: number | null): string {
+  if (!ts) return '';
+  const s = Math.floor(Date.now() / 1000) - ts;
+  if (s < 60)    return `${s}s ago`;
+  if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+function updatedLabel(fetchedAt: number): string {
+  const s = Math.floor(Date.now() / 1000) - fetchedAt;
+  if (s < 10)   return 'just now';
+  if (s < 60)   return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  return `${Math.floor(s / 3600)}h ago`;
+}
+
+function HeadlineList({ items }: { items: Headline[] }) {
+  if (!items.length) return <div className="news-empty">No headlines available.</div>;
   return (
-    <div className="news-widget-wrap">
-      {MOCK_NEWS.map(item => {
-        const color = SENTIMENT_COLOR[item.sentiment];
+    <div className="news-list">
+      {items.map((h, i) => {
+        const color = SENTIMENT_COLOR[h.sentiment] ?? SENTIMENT_COLOR.neutral;
+        const tier  = TIER_META[h.impact_tier] ?? TIER_META['Tier 3: Routine/Noise'];
+        const src   = h.source || (h.lang === 'th' ? 'TH' : 'EN');
+        const ago   = timeAgo(h.published_at);
         return (
-          <div key={item.id} className="news-item">
+          <div key={i} className="news-item">
             <div className="news-accent" style={{ background: color }} />
             <div className="news-content">
-              <div className="news-headline">{item.headline}</div>
+              <div className="news-headline">{h.title}</div>
               <div className="news-meta">
-                <span className="news-sentiment" style={{ color }}>{SENTIMENT_LABEL[item.sentiment]}</span>
-                <span className="news-source">{item.source}</span>
-                <span className="news-time">{item.time}</span>
+                <span
+                  className="news-tier-badge"
+                  style={{ color: tier.color }}
+                  title={h.impact_tier}
+                >
+                  {tier.label}
+                </span>
+                {src && <span className="news-source">{src}</span>}
+                {ago && <span className="news-age">{ago}</span>}
+                <span className="news-conf" style={{ color }}>{h.confidence}%</span>
               </div>
             </div>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function NewsWidget({ tabId: _ }: Props) {
+  const [data, setData]       = useState<HeadlinesData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+  const [now, setNow]         = useState(Date.now());
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    api.newsHeadlines()
+      .then(d => { setData(d); setNow(Date.now()); })
+      .catch(() => setError('Failed to load headlines'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Initial load + 5-minute auto-refresh
+  useEffect(() => {
+    load();
+    const id = setInterval(load, REFRESH_MS);
+    return () => clearInterval(id);
+  }, [load]);
+
+  // Tick "updated X min ago" every 30 s without re-fetching
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="news-headlines-wrap">
+
+      {/* ── Global section ── */}
+      <div className="news-section">
+        <div className="news-section-header">
+          <span className="news-section-title">🌐 Global Breaking News</span>
+          <div className="news-section-meta">
+            {loading && <span className="news-refreshing">Refreshing…</span>}
+            {!loading && data && (
+              <span className="news-updated">Updated {updatedLabel(data.fetched_at)}</span>
+            )}
+            <button className="news-refresh-btn" onClick={load} title="Refresh now">↻</button>
+          </div>
+        </div>
+        <div className="news-section-body">
+          {error   && <div className="widget-error">{error}</div>}
+          {!error  && !data && !loading && <div className="widget-loading">Loading…</div>}
+          {data    && <HeadlineList items={data.global} />}
+        </div>
+      </div>
+
+      <div className="news-section-divider" />
+
+      {/* ── Thai section ── */}
+      <div className="news-section">
+        <div className="news-section-header">
+          <span className="news-section-title">🇹🇭 Thailand Breaking News</span>
+          <span className="news-section-subtitle">Direct impact on SET stocks</span>
+        </div>
+        <div className="news-section-body">
+          {data && <HeadlineList items={data.thai} />}
+        </div>
+      </div>
+
     </div>
   );
 }

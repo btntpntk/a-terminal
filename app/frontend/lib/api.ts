@@ -79,6 +79,54 @@ export const api = {
   inferBenchmark: (ticker: string) =>
     apiFetch<{ benchmark: string }>(`/api/backtest/infer-benchmark?ticker=${encodeURIComponent(ticker)}`),
 
+  news: (ticker: string) =>
+    apiFetch<{
+      ticker: string;
+      signal: 'bullish' | 'bearish' | 'neutral';
+      confidence: number;
+      high_impact_alert?: boolean;
+      articles: Array<{
+        title: string;
+        summary: string;
+        lang: string;
+        ticker_source: string;
+        source: string;
+        published_at: number | null;
+        sentiment: 'positive' | 'negative' | 'neutral';
+        confidence: number;
+        impact_tier: 'Tier 1: Systemic Catalyst' | 'Tier 2: Sector Shock' | 'Tier 3: Routine/Noise';
+      }>;
+      metrics: {
+        total_articles: number;
+        yfinance_articles: number;
+        gnews_ticker_articles: number;
+        macro_articles: number;
+        bullish_articles: number;
+        bearish_articles: number;
+        neutral_articles: number;
+        impact_tiers: { tier1: number; tier2: number; tier3: number };
+      };
+    }>(`/api/news?ticker=${encodeURIComponent(ticker)}`),
+
+  newsHeadlines: () =>
+    apiFetch<{
+      global: Array<{
+        title: string; summary: string; lang: string;
+        ticker_source: string; source: string; published_at: number | null;
+        sentiment: 'positive' | 'negative' | 'neutral';
+        confidence: number;
+        impact_tier: 'Tier 1: Systemic Catalyst' | 'Tier 2: Sector Shock' | 'Tier 3: Routine/Noise';
+      }>;
+      thai: Array<{
+        title: string; summary: string; lang: string;
+        ticker_source: string; source: string; published_at: number | null;
+        sentiment: 'positive' | 'negative' | 'neutral';
+        confidence: number;
+        impact_tier: 'Tier 1: Systemic Catalyst' | 'Tier 2: Sector Shock' | 'Tier 3: Routine/Noise';
+      }>;
+      fetched_at: number;
+    }>('/api/news/headlines'),
+
   hmmRegime: (params?: { ticker?: string; start?: string; train_end?: string; test_start?: string; refresh?: boolean }) => {
     const p = new URLSearchParams();
     if (params?.ticker)     p.set('ticker',     params.ticker);

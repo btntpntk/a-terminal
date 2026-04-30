@@ -1778,16 +1778,89 @@ html, body, #root {
 }
 
 /* ─── News Widget ───────────────────────────────────────────── */
-.news-widget-wrap {
+/* ─── News Headlines Widget ─────────────────────────────────── */
+.news-headlines-wrap {
   display: flex;
   flex-direction: column;
-  padding: 8px 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.news-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.news-section-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px;
+  background: var(--col-elevated, #111);
+  border-bottom: 1px solid var(--col-border, #222);
+}
+
+.news-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--col-body);
+  text-transform: uppercase;
+}
+
+.news-section-subtitle {
+  font-size: 9px;
+  color: var(--col-dim);
+}
+
+.news-section-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.news-updated   { font-size: 9px; color: var(--col-dim); }
+.news-refreshing { font-size: 9px; color: var(--col-amber); }
+
+.news-refresh-btn {
+  background: none;
+  border: none;
+  color: var(--col-dim);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.news-refresh-btn:hover { color: var(--col-body); }
+
+.news-section-divider {
+  flex-shrink: 0;
+  height: 2px;
+  background: var(--col-border, #222);
+}
+
+.news-section-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.news-list { display: flex; flex-direction: column; }
+
+.news-empty {
+  padding: 12px;
+  font-size: 11px;
+  color: var(--col-dim);
 }
 
 .news-item {
   display: flex;
   gap: 0;
-  padding: 8px 12px;
+  padding: 7px 10px;
   border-bottom: 1px solid #141414;
   transition: background 0.1s;
 }
@@ -1808,25 +1881,28 @@ html, body, #root {
   font-size: 11px;
   color: var(--col-body);
   line-height: 1.5;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .news-meta {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
   font-size: 10px;
   color: var(--col-dim);
+  flex-wrap: wrap;
 }
 
-.news-sentiment {
-  font-weight: 600;
-  font-size: 9px;
-  letter-spacing: 0.5px;
-}
+.news-tier-badge { font-weight: 700; font-size: 9px; letter-spacing: 0.4px; }
+.news-source     { color: var(--col-dim); }
+.news-age        { color: var(--col-dim); }
+.news-conf       { font-size: 9px; }
 
-.news-source { color: var(--col-dim); }
-.news-time   { color: var(--col-dim); }
+.news-widget-wrap {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
 
 /* ─── Rankings Widget ───────────────────────────────────────── */
 .rw-wrap {
