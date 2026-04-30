@@ -29,7 +29,7 @@ const STRATEGIES = [
 
 const UNIVERSES = [
   { value: 'SP500_SAMPLE',   label: 'S&P 500 Sample' },
-  { value: 'THAI_LARGE_CAP', label: 'Thai Large Cap' },
+  { value: 'SET100', label: 'Thai Large Cap' },
   { value: 'CRYPTO_MAJORS',  label: 'Crypto Majors' },
   { value: 'GLOBAL_ETF',     label: 'Global ETF' },
   { value: 'WATCHLIST_A',    label: 'Watchlist A (44 stocks)' },

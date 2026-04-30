@@ -26,8 +26,8 @@ from src.agents.global_macro import run_global_macro_analysis
 from src.agents.sector_screener import (
     run_sector_screener,
     get_sector_for_ticker,
-    UNIVERSE_REGISTRY,
 )
+from src.universes import UNIVERSE_REGISTRY
 from src.agents.calculator import (
     calculate_sloan_ratio,
     calculate_cvar_95,

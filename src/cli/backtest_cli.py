@@ -68,7 +68,7 @@ _STRATEGIES = [
 
 _UNIVERSES = [
     questionary.Choice(title="S&P 500 Sample   — AAPL MSFT GOOGL AMZN META TSLA NVDA JPM JNJ XOM  [benchmark: SPY]",    value="SP500_SAMPLE"),
-    questionary.Choice(title="Thai Large Cap   — PTT KBANK SCB AOT CPALL GULF ADVANC BBL MINT BDMS [benchmark: ^SET.BK]", value="THAI_LARGE_CAP"),
+    questionary.Choice(title="Thai Large Cap   — PTT KBANK SCB AOT CPALL GULF ADVANC BBL MINT BDMS [benchmark: ^SET.BK]", value="SET100"),
     questionary.Choice(title="Crypto Majors    — BTC ETH BNB SOL ADA                               [benchmark: BTC-USD]", value="CRYPTO_MAJORS"),
     questionary.Choice(title="Global ETF       — SPY QQQ EEM GLD TLT IWM EFA VNQ HYG DBC          [benchmark: SPY]",     value="GLOBAL_ETF"),
     questionary.Choice(title="Watchlist A      — 44 SET blue-chips + NYSE:BKV                      [benchmark: ^SET.BK]", value="WATCHLIST_A"),

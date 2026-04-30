@@ -97,7 +97,7 @@ export function RankingsWidget({ tabId }: Props) {
       >
         {universes?.map(u => (
           <option key={u.key} value={u.key}>{u.display_name}</option>
-        )) ?? <option value="SET100">SET100</option>}
+        )) ?? <option value="SET100">SET100 Thailand</option>}
       </select>
 
       {/* Verdict filters */}

@@ -1,16 +1,13 @@
-import { useCallback, useRef, useState } from 'react';
+import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Topbar } from './components/layout/Topbar';
 import { Statusbar } from './components/layout/Statusbar';
-import { RegimePanel } from './components/panels/RegimePanel';
-import { MacroPanel } from './components/panels/MacroPanel';
-import { SectorPanel } from './components/panels/SectorPanel';
-import { NewsPanel } from './components/panels/NewsPanel';
-import { RankingsTable } from './components/rankings/RankingsTable';
 import { ScanProgressOverlay } from './components/scan/ScanProgressOverlay';
 import { TabBar } from './components/tabs/TabBar';
 import { TabCanvas } from './components/tabs/TabCanvas';
 import { WidgetPicker } from './components/tabs/WidgetPicker';
+import { useAppStore } from './store/useAppStore';
+import { api } from './lib/api';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,140 +18,27 @@ const queryClient = new QueryClient({
   },
 });
 
-type ViewMode = 'dashboard' | 'tabs';
-
-const MIN_COL  = 180;
-const MAX_COL  = 600;
-const MIN_ROW  = 120;
-
-function saved(key: string, fallback: number) {
-  const v = localStorage.getItem(key);
-  return v !== null ? Number(v) : fallback;
-}
-
-function ClassicDashboard() {
-  const [leftWidth,    setLeftWidth]    = useState(() => saved('panel.leftWidth',    320));
-  const [sectorHeight, setSectorHeight] = useState(() => saved('panel.sectorHeight', 300));
-  const [sectorWidth,  setSectorWidth]  = useState(() => saved('panel.sectorWidth',  260));
-  const dragging = useRef<null | 'left' | 'sector-h' | 'sector-w'>(null);
-  const startPos = useRef(0);
-  const startSz  = useRef(0);
-
-  const onMouseDownCol = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    dragging.current = 'left';
-    startPos.current = e.clientX;
-    startSz.current  = leftWidth;
-    const onMove = (ev: MouseEvent) => {
-      if (dragging.current !== 'left') return;
-      const w = Math.min(MAX_COL, Math.max(MIN_COL, startSz.current + ev.clientX - startPos.current));
-      setLeftWidth(w);
-      localStorage.setItem('panel.leftWidth', String(w));
-    };
-    const onUp = () => { dragging.current = null; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }, [leftWidth]);
-
-  const onMouseDownRow = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    dragging.current = 'sector-h';
-    startPos.current = e.clientY;
-    startSz.current  = sectorHeight;
-    const onMove = (ev: MouseEvent) => {
-      if (dragging.current !== 'sector-h') return;
-      const h = Math.max(MIN_ROW, startSz.current + ev.clientY - startPos.current);
-      setSectorHeight(h);
-      localStorage.setItem('panel.sectorHeight', String(h));
-    };
-    const onUp = () => { dragging.current = null; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }, [sectorHeight]);
-
-  const onMouseDownSectorW = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    dragging.current = 'sector-w';
-    startPos.current = e.clientX;
-    startSz.current  = sectorWidth;
-    const onMove = (ev: MouseEvent) => {
-      if (dragging.current !== 'sector-w') return;
-      const w = Math.min(MAX_COL, Math.max(MIN_COL, startSz.current + ev.clientX - startPos.current));
-      setSectorWidth(w);
-      localStorage.setItem('panel.sectorWidth', String(w));
-    };
-    const onUp = () => { dragging.current = null; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }, [sectorWidth]);
-
-  return (
-    <div className="main-layout">
-      {/* Left panel */}
-      <aside className="left-panel" style={{ width: leftWidth, minWidth: leftWidth }}>
-        <RegimePanel />
-        <div className="panel-divider" />
-        <MacroPanel />
-      </aside>
-
-      {/* Left resize handle */}
-      <div className="resize-handle" onMouseDown={onMouseDownCol} />
-
-      {/* Right side */}
-      <main className="center-panel" style={{ flexDirection: 'column' }}>
-        {/* Top row */}
-        <div style={{ height: sectorHeight, minHeight: sectorHeight, flexShrink: 0, display: 'flex', overflow: 'hidden' }}>
-          <div style={{ width: sectorWidth, minWidth: sectorWidth, overflow: 'auto', borderRight: 'none', flexShrink: 0 }}>
-            <SectorPanel />
-          </div>
-          <div className="resize-handle" onMouseDown={onMouseDownSectorW} />
-          <div style={{ flex: 1, minWidth: 0, overflow: 'auto', borderLeft: '1px solid var(--col-border)' }}>
-            <NewsPanel />
-          </div>
-        </div>
-        <div className="resize-handle-h" onMouseDown={onMouseDownRow} />
-        {/* Rankings */}
-        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <RankingsTable />
-        </div>
-      </main>
-    </div>
-  );
-}
-
 function Dashboard() {
-  const [view, setView] = useState<ViewMode>(() => {
-    return (localStorage.getItem('alphas.viewMode') as ViewMode) ?? 'dashboard';
-  });
+  const rankings      = useAppStore(s => s.rankings);
+  const scanJobId     = useAppStore(s => s.scanJobId);
+  const universe      = useAppStore(s => s.selectedUniverse);
+  const setScanJob    = useAppStore(s => s.setScanJob);
 
-  const toggleView = useCallback(() => {
-    setView(v => {
-      const next = v === 'dashboard' ? 'tabs' : 'dashboard';
-      localStorage.setItem('alphas.viewMode', next);
-      return next;
-    });
+  useEffect(() => {
+    if (rankings || scanJobId) return;
+    api.startScan(universe).then(r => setScanJob(r.job_id)).catch(() => {});
   }, []);
 
   return (
     <div className="app-shell">
       <div className="topbar-with-viewtoggle">
         <Topbar />
-        {/* Widget picker — always visible, switches to tabs view automatically */}
-        <WidgetPicker onWidgetAdded={() => setView('tabs')} />
-        <button className="view-toggle-btn" onClick={toggleView} title="Switch view">
-          {view === 'dashboard' ? '⊞ WIDGETS' : '≡ DASHBOARD'}
-        </button>
+        <WidgetPicker />
       </div>
-
-      {view === 'dashboard' ? (
-        <ClassicDashboard />
-      ) : (
-        <div className="tab-system-root">
-          <TabBar />
-          <TabCanvas />
-        </div>
-      )}
-
+      <div className="tab-system-root">
+        <TabBar />
+        <TabCanvas />
+      </div>
       <Statusbar />
       <ScanProgressOverlay />
     </div>

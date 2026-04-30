@@ -9,21 +9,23 @@ Excluded from original list (not available via yfinance):
 
 from src.backtesting.interfaces import Universe
 
+_SECTORS = {
+    "ENERGY":          {"etf": "PTT.BK",   "members": ["PTT.BK", "PTTEP.BK", "EGCO.BK", "RATCH.BK", "OR.BK", "BANPU.BK", "GULF.BK", "BKV"]},
+    "FINANCIALS":      {"etf": "KBANK.BK", "members": ["BBL.BK", "KBANK.BK", "KTB.BK", "SCB.BK", "TIDLOR.BK", "TTB.BK", "NEO.BK"]},
+    "TECH":            {"etf": "DELTA.BK", "members": ["DELTA.BK", "ADVANC.BK", "KCE.BK", "SIS.BK", "SFLEX.BK"]},
+    "CONSUMER_DISC":   {"etf": "CPALL.BK", "members": ["CPALL.BK", "CPAXT.BK", "CRC.BK", "HMPRO.BK", "GLOBAL.BK", "OSP.BK", "ERW.BK", "MINT.BK", "SABINA.BK"]},
+    "HEALTH":          {"etf": "BDMS.BK",  "members": ["BDMS.BK", "BH.BK", "BCH.BK", "MEGA.BK"]},
+    "MATERIALS":       {"etf": "SCC.BK",   "members": ["SCC.BK"]},
+    "REIT_PROPERTY":   {"etf": "CPN.BK",   "members": ["CPN.BK", "LH.BK", "WHA.BK", "SPALI.BK", "PF.BK"]},
+    "INDUSTRIALS":     {"etf": "AOT.BK",   "members": ["AOT.BK"]},
+    "WATCHLIST_OTHER": {"etf": "HL.BK",    "members": ["HL.BK", "NKT.BK", "PR9.BK", "RBF.BK", "SISB.BK"]},
+}
+
 WATCHLIST_A = Universe(
-    name="Watchlist A",
-    tickers=[
-        # SET large-caps & mid-caps  (.BK suffix)
-        "ADVANC.BK", "AOT.BK",    "BANPU.BK",  "BBL.BK",    "BCH.BK",
-        "BDMS.BK",   "BH.BK",     "CPALL.BK",  "CPAXT.BK",  "CPN.BK",
-        "CRC.BK",    "DELTA.BK",  "EGCO.BK",   "ERW.BK",    "GLOBAL.BK",
-        "GULF.BK",   "HL.BK",     "HMPRO.BK",  "KBANK.BK",  "KCE.BK",
-        "KTB.BK",    "LH.BK",     "MEGA.BK",   "MINT.BK",   "NEO.BK",
-        "NKT.BK",    "OR.BK",     "OSP.BK",    "PR9.BK",    "PTT.BK",
-        "PTTEP.BK",  "RATCH.BK",  "RBF.BK",    "SABINA.BK", "SCB.BK",
-        "SCC.BK",    "SFLEX.BK",  "SIS.BK",    "SISB.BK",   "SPALI.BK",
-        "TIDLOR.BK", "TTB.BK",    "WHA.BK",
-        # NYSE
-        "BKV",
-    ],
+    name="WATCHLIST_A",
+    display_name="Personal Watchlist",
+    tickers=list(dict.fromkeys(t for s in _SECTORS.values() for t in s["members"])),
     benchmark_ticker="^SET.BK",
+    fallback_benchmark="EWY",
+    sectors=_SECTORS,
 )

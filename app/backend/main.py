@@ -58,7 +58,7 @@ from schemas import (
     TickerRow,
     UniversesResponse,
 )
-from src.agents.sector_screener import UNIVERSE_REGISTRY
+from src.universes import UNIVERSE_REGISTRY
 
 
 # ─────────────────────────────────────────────────────────────
@@ -413,7 +413,7 @@ async def get_sectors(
 # ─────────────────────────────────────────────────────────────
 
 @app.post("/api/scan/start", response_model=ScanProgress, tags=["Scan"])
-async def start_scan(universe: str = Query("SET100", description="SET100 | WATCHLIST")):
+async def start_scan(universe: str = Query("SET100", description=str(list(UNIVERSE_REGISTRY)))):
     """
     Launch a background full-universe scan (Stages 0–4 for every ticker).
     Returns a job_id to poll for progress.

@@ -3,7 +3,7 @@
 
 from src.universes import (          # noqa: F401
     SP500_SAMPLE,
-    THAI_LARGE_CAP,
+    SET100,
     CRYPTO_MAJORS,
     GLOBAL_ETF,
     UNIVERSE_MAP,
@@ -11,7 +11,7 @@ from src.universes import (          # noqa: F401
 
 __all__ = [
     "SP500_SAMPLE",
-    "THAI_LARGE_CAP",
+    "SET100",
     "CRYPTO_MAJORS",
     "GLOBAL_ETF",
     "UNIVERSE_MAP",

@@ -11,7 +11,8 @@ warnings.filterwarnings('ignore')
 
 from src.data.providers import fetch_all_data
 from src.agents.calculator import get_fin_val, safe_scalar
-from src.agents.sector_screener import SET100_SECTOR_UNIVERSE
+from src.universes import SET100 as _THAI_LARGE_CAP
+SET100_SECTOR_UNIVERSE = _THAI_LARGE_CAP.sectors
 
 # ─────────────────────────────────────────────
 # LAYER 1 — REGIME

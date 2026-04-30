@@ -45,12 +45,18 @@ class Universe:
         name: str,
         tickers: list[str],
         benchmark_ticker: str,
+        display_name: str | None = None,
+        fallback_benchmark: str | None = None,
+        sectors: dict | None = None,
         data_source: str = "yfinance",
         frequency: str = "daily",
     ):
         self.name = name
+        self.display_name = display_name or name
         self.tickers = tickers
         self.benchmark_ticker = benchmark_ticker
+        self.fallback_benchmark = fallback_benchmark
+        self.sectors = sectors  # sector_name -> {"etf": str, "members": list[str]}
         self.data_source = data_source
         self.frequency = frequency
 
