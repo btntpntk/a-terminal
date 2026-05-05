@@ -777,11 +777,26 @@ html, body, #root {
   background: rgba(255,140,0,0.12);
 }
 
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+.live-dot {
+  display: inline-block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--col-emerald);
+  animation: live-pulse 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
 .widget-picker-panel {
   position: fixed;
   top: 48px;
   right: 80px;
   width: 260px;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
   background: var(--col-surface);
   border: 1px solid var(--col-amber);
   box-shadow: 0 12px 40px rgba(0,0,0,0.7);

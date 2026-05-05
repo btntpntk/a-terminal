@@ -21,6 +21,7 @@ import { BacktestWidget }               from '../widgets/BacktestWidget';
 import { HMMRegimeWidget }              from '../widgets/HMMRegimeWidget';
 import { ShannonEntropyWidget }         from '../widgets/ShannonEntropyWidget';
 import { GlobalMacroCorrelationWidget } from '../widgets/GlobalMacroCorrelationWidget';
+import { TransferEntropyWidget }         from '../widgets/TransferEntropyWidget';
 
 // ── Widgets that use the tab's activeTicker in their header ──
 const TICKER_WIDGETS = new Set<WidgetType>([
@@ -43,6 +44,7 @@ const WIDGET_LABELS: Record<WidgetType, string> = {
   'hmm-regime':         'HMM REGIME DETECTOR',
   'shannon-entropy':    'SHANNON ENTROPY · SYSTEMIC RISK',
   'correlation-matrix': 'MACRO CORRELATION MATRIX',
+  'transfer-entropy':   'TRANSFER ENTROPY · INFORMATION FLOW',
 };
 
 interface Props {
@@ -67,6 +69,7 @@ function WidgetBody({ widget, tabId }: Props) {
     case 'hmm-regime':         return <HMMRegimeWidget              tabId={tabId} />;
     case 'shannon-entropy':    return <ShannonEntropyWidget         tabId={tabId} />;
     case 'correlation-matrix': return <GlobalMacroCorrelationWidget tabId={tabId} />;
+    case 'transfer-entropy':   return <TransferEntropyWidget        tabId={tabId} />;
     default:                   return null;
   }
 }

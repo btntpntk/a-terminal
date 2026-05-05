@@ -153,4 +153,28 @@ export const api = {
     if (params?.refresh)   p.set('refresh',   'true');
     return apiFetch<import('../types/api').CorrelationMatrixResponse>(`/api/macro/correlation-matrix?${p}`);
   },
+
+  transferEntropy: (params?: {
+    source?: string; target?: string; lag_x?: number; lag_y?: number;
+    bins?: number; window?: number; refresh?: boolean;
+  }) => {
+    const p = new URLSearchParams();
+    if (params?.source)         p.set('source', params.source);
+    if (params?.target)         p.set('target', params.target);
+    if (params?.lag_x  != null) p.set('lag_x',  String(params.lag_x));
+    if (params?.lag_y  != null) p.set('lag_y',  String(params.lag_y));
+    if (params?.bins   != null) p.set('bins',   String(params.bins));
+    if (params?.window != null) p.set('window', String(params.window));
+    if (params?.refresh)        p.set('refresh', 'true');
+    return apiFetch<import('../types/api').TransferEntropyResponse>(`/api/analysis/transfer-entropy?${p}`);
+  },
+
+  sectorTeMatrix: (params?: { lag?: number; bins?: number; window?: number; refresh?: boolean }) => {
+    const p = new URLSearchParams();
+    if (params?.lag    != null) p.set('lag',    String(params.lag));
+    if (params?.bins   != null) p.set('bins',   String(params.bins));
+    if (params?.window != null) p.set('window', String(params.window));
+    if (params?.refresh)        p.set('refresh', 'true');
+    return apiFetch<import('../types/api').SectorTEMatrixResponse>(`/api/analysis/sector-te-matrix?${p}`);
+  },
 };

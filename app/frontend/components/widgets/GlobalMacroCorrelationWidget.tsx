@@ -234,7 +234,10 @@ export function GlobalMacroCorrelationWidget({ tabId: _ }: Props) {
           background: 'var(--col-surface)', display: 'flex', justifyContent: 'space-between',
         }}>
           <span style={{ fontSize: 9, color: 'var(--col-dim)' }}>window=30d · {data.benchmark}</span>
-          <span style={{ fontSize: 9, color: 'var(--col-dim)' }}>↻ 5 min</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span className="live-dot" />
+            <span style={{ fontSize: 9, color: 'var(--col-emerald)' }}>LIVE · 60s</span>
+          </span>
         </div>
       )}
     </div>
