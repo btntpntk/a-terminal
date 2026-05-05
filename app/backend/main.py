@@ -1577,6 +1577,99 @@ async def clear_cache():
     return {"message": "Cache cleared.", "stats": cache.stats()}
 
 
+# ─────────────────────────────────────────────────────────────
+# ROUTES — HURST EXPONENT (R/S Analysis)
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/api/hurst", tags=["Analysis"])
+async def get_hurst(
+    ticker:  str  = Query("SPY"),
+    window:  int  = Query(100, ge=20, le=500, description="Rolling R/S window (bars)"),
+    periods: int  = Query(252, ge=50, le=1000, description="Number of rolling points to return"),
+    refresh: bool = Query(False),
+):
+    """
+    Rolling Hurst Exponent via Rescaled Range (R/S) analysis on log returns.
+    H < 0.45  → sideways / mean-reverting
+    H ∈ [0.45, 0.55] → random walk
+    H > 0.55  → trending / persistent
+    Cached for 5 minutes.
+    """
+    cache_key = f"hurst_{ticker}_{window}_{periods}"
+    if not refresh:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+    import numpy as np
+    import yfinance as yf
+
+    def _compute():
+        fetch_period = f"{max(5, (periods + window) // 252 + 3)}y"
+        df = yf.download(
+            ticker, period=fetch_period, interval="1d",
+            auto_adjust=True, progress=False, multi_level_index=False,
+        )
+        if df.empty or "Close" not in df.columns:
+            return None
+        closes = df["Close"].dropna()
+        if len(closes) < window + 10:
+            return None
+
+        prices = closes.values.astype(float)
+        log_rets = np.log(prices[1:] / prices[:-1])
+        dates    = closes.index[1:]
+
+        def _hurst_rs(r: np.ndarray) -> float:
+            n = len(r)
+            if n < 8:
+                return 0.5
+            mean_r = r.mean()
+            dev    = r - mean_r
+            cum    = np.cumsum(dev)
+            R      = float(cum.max() - cum.min())
+            S      = float(r.std(ddof=0))
+            if S <= 0 or R <= 0:
+                return 0.5
+            return float(np.log(R / S) / np.log(n))
+
+        rolling_h     = [_hurst_rs(log_rets[i - window: i]) for i in range(window, len(log_rets) + 1)]
+        rolling_dates = dates[window - 1:]
+
+        # Trim to last `periods` points
+        rolling_h     = rolling_h[-periods:]
+        rolling_dates = rolling_dates[-periods:]
+
+        current_h = float(rolling_h[-1]) if rolling_h else 0.5
+
+        def _regime(h: float) -> str:
+            if h < 0.45:
+                return "sideways"
+            if h > 0.55:
+                return "trending"
+            return "random"
+
+        return {
+            "ticker":    ticker.upper(),
+            "window":    window,
+            "current_h": round(current_h, 4),
+            "regime":    _regime(current_h),
+            "series":    [
+                {"date": str(d.date()), "h": round(float(h), 4)}
+                for d, h in zip(rolling_dates, rolling_h)
+            ],
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+    result = await asyncio.to_thread(_compute)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"No price data for {ticker}")
+
+    result = _clean_floats(result)
+    cache.set(cache_key, result, ttl_seconds=300)
+    return result
+
+
 @app.get("/api/cache/stats", tags=["Admin"])
 async def cache_stats():
     """Return cache occupancy statistics."""

@@ -17,7 +17,8 @@ export type WidgetType =
   | 'shannon-entropy'
   | 'correlation-matrix'
   | 'transfer-entropy'
-  | 'fundamental';
+  | 'fundamental'
+  | 'hurst-exponent';
 
 export interface WidgetConfig {
   id: string;     // matches LayoutItem 'i'

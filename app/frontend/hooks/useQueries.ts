@@ -101,6 +101,17 @@ export function useRefreshRankings() {
   return () => qc.invalidateQueries({ queryKey: ['rankings', universe] });
 }
 
+export function useHurst(ticker: string, window = 100, periods = 252) {
+  return useQuery({
+    queryKey: ['hurst', ticker, window, periods],
+    queryFn:  () => api.hurst({ ticker, window, periods }),
+    enabled:  !!ticker,
+    staleTime: 4 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,   // matches backend TTL
+    retry: 1,
+  });
+}
+
 export function useHMMRegime(ticker = 'SPY') {
   return useQuery({
     queryKey: ['hmm-regime', ticker],

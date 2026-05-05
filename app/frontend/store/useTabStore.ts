@@ -28,6 +28,7 @@ const DEFAULT_WIDGET_SIZES: Record<WidgetType, { w: number; h: number }> = {
   'correlation-matrix': { w: 7,  h: 10 },
   'transfer-entropy':   { w: 8,  h: 12 },
   'fundamental':        { w: 4,  h: 13 },
+  'hurst-exponent':     { w: 5,  h: 10 },
 };
 
 /** Used by addTab() when the user clicks "+". */

@@ -132,6 +132,15 @@ export const api = {
       fetched_at: number;
     }>('/api/news/headlines'),
 
+  hurst: (params?: { ticker?: string; window?: number; periods?: number; refresh?: boolean }) => {
+    const p = new URLSearchParams();
+    if (params?.ticker)          p.set('ticker',  params.ticker);
+    if (params?.window  != null) p.set('window',  String(params.window));
+    if (params?.periods != null) p.set('periods', String(params.periods));
+    if (params?.refresh)         p.set('refresh', 'true');
+    return apiFetch<import('../types/api').HurstResponse>(`/api/hurst?${p}`);
+  },
+
   hmmRegime: (params?: { ticker?: string; start?: string; train_end?: string; test_start?: string; refresh?: boolean }) => {
     const p = new URLSearchParams();
     if (params?.ticker)     p.set('ticker',     params.ticker);

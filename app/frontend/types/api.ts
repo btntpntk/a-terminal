@@ -244,6 +244,21 @@ export interface HMMRegimePoint {
   close: number | null;
 }
 
+// Hurst Exponent
+export interface HurstPoint {
+  date: string;
+  h: number;
+}
+
+export interface HurstResponse {
+  ticker: string;
+  window: number;
+  current_h: number;
+  regime: 'sideways' | 'random' | 'trending';
+  series: HurstPoint[];
+  timestamp: string;
+}
+
 export interface HMMRegimeResponse {
   ticker: string;
   current_regime: 'bull' | 'sideways' | 'bear' | 'crash';

@@ -23,6 +23,7 @@ import { ShannonEntropyWidget }         from '../widgets/ShannonEntropyWidget';
 import { GlobalMacroCorrelationWidget } from '../widgets/GlobalMacroCorrelationWidget';
 import { TransferEntropyWidget }         from '../widgets/TransferEntropyWidget';
 import { FundamentalWidget }            from '../widgets/FundamentalWidget';
+import { HurstWidget }                  from '../widgets/HurstWidget';
 
 // ── Widgets that use the tab's activeTicker in their header ──
 const TICKER_WIDGETS = new Set<WidgetType>([
@@ -47,6 +48,7 @@ const WIDGET_LABELS: Record<WidgetType, string> = {
   'correlation-matrix': 'MACRO CORRELATION MATRIX',
   'transfer-entropy':   'TRANSFER ENTROPY · INFORMATION FLOW',
   'fundamental':        'FUNDAMENTALS · STAGE 3',
+  'hurst-exponent':     'HURST EXPONENT · MARKET REGIME',
 };
 
 interface Props {
@@ -73,6 +75,7 @@ function WidgetBody({ widget, tabId }: Props) {
     case 'correlation-matrix': return <GlobalMacroCorrelationWidget tabId={tabId} />;
     case 'transfer-entropy':   return <TransferEntropyWidget        tabId={tabId} />;
     case 'fundamental':        return <FundamentalWidget            tabId={tabId} />;
+    case 'hurst-exponent':     return <HurstWidget                  tabId={tabId} />;
     default:                   return null;
   }
 }

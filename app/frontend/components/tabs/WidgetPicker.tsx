@@ -32,6 +32,7 @@ const WIDGET_OPTIONS: WidgetOption[] = [
   { group: 'RISK',       type: 'shannon-entropy',     label: 'Shannon Entropy',          desc: 'Systemic noise indicator — return distribution entropy for SET/S&P/VIX' },
   { group: 'RISK',       type: 'correlation-matrix',  label: 'Macro Correlation Matrix', desc: 'Rolling 30d correlation: US10Y, DXY, Brent, USD/THB vs SET50' },
   { group: 'RISK',       type: 'transfer-entropy',    label: 'Transfer Entropy',         desc: 'Directed info flow: SEC event → price leakage + SET50 sector lead-lag matrix' },
+  { group: 'ANALYSIS',  type: 'hurst-exponent',      label: 'Hurst Exponent',           desc: 'Rolling R/S regime detector — sideways / random walk / trending' },
 ];
 
 interface Props {
