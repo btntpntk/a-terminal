@@ -21,10 +21,14 @@
       "Bash(python -c \"import ast; ast.parse\\(open\\('app/backend/main.py', encoding='utf-8'\\).read\\(\\)\\); print\\('main.py: OK'\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\('c:/Users/TRNTTI/Documents/alphas/app/backend/main.py', encoding='utf-8'\\).read\\(\\)\\); print\\('main.py: OK'\\)\")",
       "Bash(git -C c:/Users/TRNTTI/Documents/alphas log --oneline -10)",
+<<<<<<< Updated upstream
       "Bash(python -c \"from src.universes import UNIVERSE_REGISTRY; print\\(list\\(UNIVERSE_REGISTRY.keys\\(\\)\\)\\)\")",
       "Bash(npm run *)",
       "Bash(wait)",
       "Bash(python3 -m json.tool)"
+=======
+      "Bash(python -c ' *)"
+>>>>>>> Stashed changes
     ]
   }
 }

@@ -25,6 +25,17 @@ const STRATEGIES = [
   { value: 'VolatilityBreakoutStrategy', label: 'Volatility Breakout' },
   { value: 'DRSIStrategy',               label: 'DRSI (Dual RSI)' },
   { value: 'VADERStrategy',              label: 'VADER — Volatility-Adaptive Dual-Edge Regime' },
+  // ── PineScript-derived strategies ────────────────────────────────────────
+  { value: 'PivotPointSupertrendStrategy',      label: 'Pivot Point Supertrend' },
+  { value: 'LaguerreRSIStrategy',               label: 'Laguerre RSI (Ehlers)' },
+  { value: 'HurstChoppinessStrategy',           label: 'Hurst Choppiness Regime' },
+  { value: 'MansfieldMinerviniStrategy',        label: 'Mansfield Minervini Template' },
+  { value: 'WVFConnorsRSIStrategy',             label: 'WVF + Connors RSI (Bottom Kit)' },
+  { value: 'ChandelierExitStrategy',            label: 'Chandelier Exit' },
+  { value: 'BankerFundFlowStrategy',            label: 'Banker Fund Flow (5-Phase)' },
+  { value: 'CPRCamarillaStrategy',              label: 'CPR + Camarilla Weekly Pivots' },
+  { value: 'PositionCostDistributionStrategy',  label: 'Position Cost Distribution (Chip)' },
+  { value: 'SETSwingDashboardStrategy',         label: 'SET Swing Dashboard (7-Star Confluence)' },
 ];
 
 const UNIVERSES = [
