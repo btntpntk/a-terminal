@@ -406,21 +406,21 @@ A candidate entry is rejected unless all three conditions hold:
 
 **Method 1 — Risk Parity SL (default):**
 
-$$\text{dollars} = \frac{\text{portfolio} \times \text{acceptable\_risk\_pct}}{S_0 - SL} \times S_0$$
+$$\text{dollars} = \frac{\text{portfolio} \times \text{acceptable risk pct}}{S_0 - SL} \times S_0$$
 
 **Method 2 — Kelly MC:**
 
 $$f^* = \frac{P(\text{TP}) \times RR - P(\text{SL})}{RR}$$
 
-$$\text{dollars} = f^* \times \text{kelly\_fraction} \times \text{portfolio}$$
+$$\text{dollars} = f^* \times \text{kelly fraction} \times \text{portfolio}$$
 
 Both methods apply hard caps:
 
-$$\text{dollars} \leq \min\!\left(\text{portfolio} \times w_{\max},\; \text{cash} - \text{cash\_reserve}\right)$$
+$$\text{dollars} \leq \min\!\left(\text{portfolio} \times w_{\max},\; \text{cash} - \text{cash reserve}\right)$$
 
 **Correlation penalty:** If the maximum absolute rolling correlation between the new ticker and any held position exceeds the threshold, position size is scaled down:
 
-$$\text{dollars}_{\text{adj}} = \text{dollars} \times (1 - \text{penalty\_factor})$$
+$$\text{dollars}_{\text{adj}} = \text{dollars} \times (1 - \text{penalty factor})$$
 
 ### Exit Priority (non-negotiable order)
 
@@ -643,14 +643,14 @@ Spikes when price drops to a multi-week low (fear proxy).
 
 **WVF spike detection:** Spike is triggered when WVF exceeds either the upper Bollinger Band or 85th percentile of its 50-bar lookback:
 
-$$\text{spike} = \text{WVF} \geq \text{BB\_upper} \;\lor\; \text{WVF} \geq Q_{0.85}(\text{WVF}, 50)$$
+$$\text{spike} = \text{WVF} \geq \text{BB}_{\text{upper}} \;\lor\; \text{WVF} \geq Q_{0.85}(\text{WVF}, 50)$$
 
 **Connors RSI-2:**
 
-$$\text{ConnorsRSI} = \frac{\text{RSI}(2) + \text{StreakRSI}(3) + \text{ROC\_Percentile}(100)}{3}$$
+$$\text{ConnorsRSI} = \frac{\text{RSI}(2) + \text{StreakRSI}(3) + \text{ROC}_{\text{Pct}}(100)}{3}$$
 
 - $\text{StreakRSI}$: RSI applied to the signed consecutive up/down day streak
-- $\text{ROC\_Percentile}$: percentile rank of 1-day ROC among last 100 bars
+- $\text{ROC}_{\text{Pct}}$: percentile rank of 1-day ROC among last 100 bars
 
 **Entry (dual-confirm):**
 1. WVF spiked yesterday but not today (fired)
