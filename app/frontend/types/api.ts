@@ -368,3 +368,50 @@ export interface MCBacktestResponse extends BacktestResponse {
   mc_trade_details:   MCTradeDetail[];
   mc_aggregate_stats: MCAggregateStats;
 }
+
+// Shannon Entropy — /api/market/entropy
+export interface EntropyPoint {
+  date:       string;
+  entropy:    number;
+  normalized: number;
+}
+export interface EntropyResponse {
+  ticker:             string;
+  current_entropy:    number;
+  normalized_entropy: number;
+  max_entropy:        number;
+  regime:             'LOW NOISE' | 'MODERATE' | 'HIGH NOISE';
+  interpretation:     string;
+  window_days:        number;
+  series:             EntropyPoint[];
+  timestamp:          string;
+}
+
+// Macro Correlation Matrix — /api/macro/correlation-matrix
+export type CorrSignal =
+  | 'STRONG_POS'
+  | 'MILD_POS'
+  | 'DECOUPLED'
+  | 'MILD_NEG'
+  | 'STRONG_NEG'
+  | 'DATA_MISSING'
+  | 'INSUFFICIENT_DATA';
+
+export interface CorrPoint {
+  date: string;
+  corr: number;
+}
+export interface DriverCorrelation {
+  ticker:       string;
+  signal:       CorrSignal;
+  current_corr: number | null;
+  corr_30d:     number | null;
+  corr_60d:     number | null;
+  series:       CorrPoint[];
+}
+export interface CorrelationMatrixResponse {
+  benchmark:    string;
+  window:       number;
+  correlations: Record<string, DriverCorrelation>;
+  timestamp:    string;
+}

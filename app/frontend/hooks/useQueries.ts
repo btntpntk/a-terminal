@@ -109,3 +109,23 @@ export function useHMMRegime(ticker = 'SPY') {
     retry: false,
   });
 }
+
+export function useMarketEntropy(ticker = '^SET.BK', days = 30) {
+  return useQuery({
+    queryKey: ['market-entropy', ticker, days],
+    queryFn: () => api.marketEntropy({ ticker, days }),
+    staleTime: 4 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,  // matches backend 5-min cache
+    retry: 1,
+  });
+}
+
+export function useCorrelationMatrix(benchmark = '^SET.BK', window = 30) {
+  return useQuery({
+    queryKey: ['correlation-matrix', benchmark, window],
+    queryFn: () => api.correlationMatrix({ benchmark, window }),
+    staleTime: 4 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,  // matches backend 5-min cache
+    retry: 1,
+  });
+}

@@ -1640,3 +1640,220 @@ async def get_hmm_regime(
     result = _clean_floats(result)
     cache.set(cache_key, result, ttl_seconds=21600)  # 6-hour cache
     return result
+
+
+# ─────────────────────────────────────────────────────────────
+# ROUTES — SHANNON ENTROPY (Systemic Risk Indicator)
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/api/market/entropy", tags=["Analysis"])
+async def get_market_entropy(
+    ticker:  str  = Query("^SET.BK", description="Ticker for return distribution"),
+    days:    int  = Query(30, ge=10, le=252, description="Rolling window in trading days"),
+    bins:    int  = Query(20, ge=5,  le=50,  description="Histogram bins for discretisation"),
+    refresh: bool = Query(False),
+):
+    """
+    Shannon Entropy H = -Σ p_i log₂(p_i) of the rolling return distribution.
+    High entropy → noisy/high-uncertainty regime. Low → trending/directional.
+    Cached 5 minutes (same frequency as market-overview).
+    """
+    cache_key = f"entropy_{ticker}_{days}_{bins}"
+    if not refresh:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+    def _compute():
+        import yfinance as yf
+        import numpy as np
+
+        df = yf.download(ticker, period="1y", progress=False, auto_adjust=True)
+        if df.empty:
+            raise ValueError(f"No data for {ticker}")
+
+        closes  = df["Close"].squeeze() if hasattr(df["Close"], "squeeze") else df["Close"]
+        returns = closes.pct_change().dropna()
+        if len(returns) < days + 1:
+            raise ValueError(
+                f"Insufficient history for {ticker} (need {days + 1} bars, got {len(returns)})"
+            )
+
+        max_entropy = math.log2(bins)
+
+        def _entropy(arr: "np.ndarray") -> float:
+            counts, _ = np.histogram(arr, bins=bins)
+            probs = counts / counts.sum()
+            probs = probs[probs > 0]
+            return float(-np.sum(probs * np.log2(probs)))
+
+        current_h    = _entropy(returns.tail(days).values)
+        normalized_h = current_h / max_entropy
+
+        # Rolling series: one point per bar over the last 90 bars
+        ret_arr  = returns.values
+        date_arr = returns.index
+        series: list[dict] = []
+        start = max(days, len(ret_arr) - 90)
+        for i in range(start, len(ret_arr)):
+            window = ret_arr[i - days: i]
+            if len(window) < days // 2:
+                continue
+            h = _entropy(window)
+            series.append({
+                "date":       date_arr[i].strftime("%Y-%m-%d"),
+                "entropy":    round(h, 4),
+                "normalized": round(h / max_entropy, 4),
+            })
+
+        if normalized_h < 0.50:
+            regime, interpretation = "LOW NOISE", "Trending regime — signal clarity elevated"
+        elif normalized_h < 0.75:
+            regime, interpretation = "MODERATE", "Mixed signals — moderate uncertainty"
+        else:
+            regime, interpretation = "HIGH NOISE", "Systemic noise — reduce position sizing"
+
+        return {
+            "ticker":             ticker,
+            "current_entropy":    round(current_h, 4),
+            "normalized_entropy": round(normalized_h, 4),
+            "max_entropy":        round(max_entropy, 4),
+            "regime":             regime,
+            "interpretation":     interpretation,
+            "window_days":        days,
+            "series":             series,
+            "timestamp":          datetime.utcnow().isoformat(),
+        }
+
+    try:
+        result = await asyncio.to_thread(_compute)
+        result = _clean_floats(result)
+        cache.set(cache_key, result, ttl_seconds=300)
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Entropy computation failed: {exc}")
+
+
+# ─────────────────────────────────────────────────────────────
+# ROUTES — MACRO CORRELATION MATRIX
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/api/macro/correlation-matrix", tags=["Stage 1"])
+async def get_correlation_matrix(
+    benchmark: str  = Query("^SET.BK", description="Benchmark to correlate macro drivers against"),
+    window:    int  = Query(30, ge=10, le=90, description="Rolling correlation window (trading days)"),
+    refresh:   bool = Query(False),
+):
+    """
+    Dynamic correlation matrix: US 10Y Yield (^TNX), DXY (DX-Y.NYB), Brent Crude (BZ=F),
+    and USD/THB (THB=X) correlated against the SET50 benchmark on a rolling window.
+
+    Data sourced entirely from yfinance — no additional API keys required.
+    Missing drivers return null correlations with a DATA_MISSING signal.
+    Same 5-minute cache frequency as /api/market-overview.
+    """
+    cache_key = f"corr_matrix_{benchmark}_{window}"
+    if not refresh:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+    def _compute():
+        import yfinance as yf
+        import pandas as pd
+        import numpy as np
+
+        DRIVERS: dict[str, str] = {
+            "US10Y":  "^TNX",
+            "DXY":    "DX-Y.NYB",
+            "BRENT":  "BZ=F",
+            "USDTHB": "THB=X",
+        }
+        all_tickers = [benchmark] + list(DRIVERS.values())
+
+        raw = yf.download(all_tickers, period="1y", progress=False, auto_adjust=True)
+        if raw.empty:
+            raise ValueError("yfinance returned no data for macro correlation matrix")
+
+        closes  = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+        returns = closes.pct_change().dropna(how="all")
+
+        if benchmark not in returns.columns:
+            raise ValueError(f"Benchmark {benchmark} unavailable from yfinance")
+
+        bench = returns[benchmark].dropna()
+
+        correlations: dict[str, dict] = {}
+        for name, ticker in DRIVERS.items():
+            if ticker not in returns.columns:
+                correlations[name] = {
+                    "ticker": ticker, "signal": "DATA_MISSING",
+                    "current_corr": None, "corr_30d": None, "corr_60d": None, "series": [],
+                }
+                continue
+
+            driver  = returns[ticker].dropna()
+            aligned = pd.concat([bench, driver], axis=1).dropna()
+            aligned.columns = pd.Index(["bench", "driver"])
+
+            if len(aligned) < 10:
+                correlations[name] = {
+                    "ticker": ticker, "signal": "INSUFFICIENT_DATA",
+                    "current_corr": None, "corr_30d": None, "corr_60d": None, "series": [],
+                }
+                continue
+
+            corr_60 = float(aligned["bench"].tail(60).corr(aligned["driver"].tail(60)))
+            corr_30 = float(aligned["bench"].tail(30).corr(aligned["driver"].tail(30)))
+
+            # Rolling series for the last 90 bars
+            n = len(aligned)
+            series: list[dict] = []
+            for i in range(max(window, n - 90), n):
+                sl = aligned.iloc[max(0, i - window + 1): i + 1]
+                if len(sl) >= max(5, window // 3):
+                    c = float(sl["bench"].corr(sl["driver"]))
+                    if not math.isnan(c):
+                        series.append({
+                            "date": aligned.index[i].strftime("%Y-%m-%d"),
+                            "corr": round(c, 4),
+                        })
+
+            if abs(corr_30) < 0.20:
+                signal = "DECOUPLED"
+            elif corr_30 > 0.50:
+                signal = "STRONG_POS"
+            elif corr_30 < -0.50:
+                signal = "STRONG_NEG"
+            elif corr_30 > 0:
+                signal = "MILD_POS"
+            else:
+                signal = "MILD_NEG"
+
+            correlations[name] = {
+                "ticker":       ticker,
+                "signal":       signal,
+                "current_corr": round(corr_30, 4),
+                "corr_30d":     round(corr_30, 4),
+                "corr_60d":     round(corr_60, 4),
+                "series":       series,
+            }
+
+        return {
+            "benchmark":    benchmark,
+            "window":       window,
+            "correlations": correlations,
+            "timestamp":    datetime.utcnow().isoformat(),
+        }
+
+    try:
+        result = await asyncio.to_thread(_compute)
+        result = _clean_floats(result)
+        cache.set(cache_key, result, ttl_seconds=300)
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Correlation matrix failed: {exc}")

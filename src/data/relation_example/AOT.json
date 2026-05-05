@@ -1,0 +1,95 @@
+{
+  "entities": [
+    {
+      "ticker": "AOT.BK",
+      "name": "Airports of Thailand Public Company Limited",
+      "relationship_web": {
+        "financial": [
+          {
+            "entity": "KTB.BK",
+            "relation": "Primary Lender/State-Linked Creditor",
+            "proportionality": "Inversely Proportional",
+            "note": "AOT utilizes state-linked credit facilities for major infrastructure expansion; interest rate hikes increase the cost of servicing long-term debt."
+          },
+          {
+            "entity": "BBL.BK",
+            "relation": "Major Debt Provider",
+            "proportionality": "Inversely Proportional",
+            "note": "Provides significant financing for terminal upgrades and runway construction under the Suvarnabhumi Phase 2 & 3 projects."
+          }
+        ],
+        "supply_chain": [
+          {
+            "entity": "King Power Group (Private)",
+            "relation": "Downstream/Concessionaire",
+            "proportionality": "Proportional",
+            "sensitivity_index": 0.85,
+            "note": "Duty-free and retail concessions account for over 40% of non-aeronautical revenue; performance is directly tied to passenger traffic and spend-per-head."
+          },
+          {
+            "entity": "BAFS.BK",
+            "relation": "Upstream/Fuel Services Provider",
+            "proportionality": "Proportional",
+            "sensitivity_index": 0.65,
+            "note": "Exclusive fuel hydrant provider at major airports; flight volume directly correlates with AOT's landing fees and BAFS service volumes."
+          },
+          {
+            "entity": "STEC.BK",
+            "relation": "Upstream/Construction Contractor",
+            "proportionality": "Inversely Proportional",
+            "sensitivity_index": 0.45,
+            "note": "Primary contractor for infrastructure; rising construction material costs or project delays negatively impact AOT's CAPEX efficiency."
+          }
+        ],
+        "equity_cross_holdings": [
+          {
+            "entity": "AOTGA.BK",
+            "type": "Associate/Joint Venture",
+            "ownership_pct": 49.0,
+            "proportionality": "Proportional"
+          },
+          {
+            "entity": "BAFS.BK",
+            "type": "Investment",
+            "ownership_pct": 4.94,
+            "proportionality": "Proportional"
+          }
+        ],
+        "competitors": [
+          {
+            "ticker": "CAG.BK",
+            "market_share_overlap": "High",
+            "proportionality": "Inversely Proportional",
+            "note": "Regional hub competition for international transit traffic between Europe/US and Asia-Pacific."
+          },
+          {
+            "ticker": "BA.BK",
+            "market_share_overlap": "Medium",
+            "proportionality": "Inversely Proportional",
+            "note": "Bangkok Airways operates private airports (Samui, Trat) which compete for high-yield luxury tourist segments."
+          }
+        ],
+        "macro_commodity_factors": [
+          {
+            "factor": "Chinese Tourist Arrivals",
+            "proportionality": "Proportional",
+            "impact_lag": "T+0",
+            "logic": "The single largest driver of international Passenger Service Charges (PSC) and retail concession revenue."
+          },
+          {
+            "factor": "USD/THB Exchange Rate",
+            "proportionality": "Proportional",
+            "impact_lag": "T+0",
+            "logic": "A weaker THB incentivizes inbound tourism, increasing airport throughput, though it marginally affects foreign-denominated debt valuation."
+          },
+          {
+            "factor": "Singapore Jet Fuel (MOPS)",
+            "proportionality": "Inversely Proportional",
+            "impact_lag": "T+1 Month",
+            "logic": "Indirect impact; high fuel costs lead to flight cancellations and reduced frequency by airline clients, lowering landing/parking fee revenue."
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -217,16 +217,6 @@ npm run dev
 # → http://localhost:3000
 ```
 
-**CLI — single ticker** (from project root):
-```bash
-poetry run python -m src.cli.cli4
-```
-
-**CLI — full universe scan** (from project root):
-```bash
-poetry run python -m src.cli.cli_ranking
-```
-
 ---
 
 ## API Reference

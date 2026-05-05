@@ -25,8 +25,11 @@ const WIDGET_OPTIONS: WidgetOption[] = [
   { group: 'LISTS',      type: 'watchlist',         label: 'Watchlist',          desc: 'Custom tickers — day/week/month/year %' },
   { group: 'LISTS',      type: 'rankings',          label: 'Rankings',           desc: 'Full alpha scan table with RUN SCAN control' },
   // Backtesting
-  { group: 'ANALYSIS',   type: 'backtest',          label: 'Walk-Forward Backtest', desc: 'Equity curve vs benchmark, KPIs, walk-forward folds' },
-  { group: 'ANALYSIS',   type: 'hmm-regime',        label: 'HMM Regime Detector',   desc: 'Expanding-window Gaussian HMM — bull/sideways/bear with posteriors' },
+  { group: 'ANALYSIS',   type: 'backtest',            label: 'Walk-Forward Backtest',    desc: 'Equity curve vs benchmark, KPIs, walk-forward folds' },
+  { group: 'ANALYSIS',   type: 'hmm-regime',          label: 'HMM Regime Detector',      desc: 'Expanding-window Gaussian HMM — bull/sideways/bear with posteriors' },
+  // Risk intelligence
+  { group: 'RISK',       type: 'shannon-entropy',     label: 'Shannon Entropy',          desc: 'Systemic noise indicator — return distribution entropy for SET/S&P/VIX' },
+  { group: 'RISK',       type: 'correlation-matrix',  label: 'Macro Correlation Matrix', desc: 'Rolling 30d correlation: US10Y, DXY, Brent, USD/THB vs SET50' },
 ];
 
 interface Props {

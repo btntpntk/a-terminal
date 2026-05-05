@@ -13,7 +13,9 @@ export type WidgetType =
   | 'news'
   | 'rankings'
   | 'backtest'
-  | 'hmm-regime';
+  | 'hmm-regime'
+  | 'shannon-entropy'
+  | 'correlation-matrix';
 
 export interface WidgetConfig {
   id: string;     // matches LayoutItem 'i'

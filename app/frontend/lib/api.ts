@@ -136,4 +136,21 @@ export const api = {
     if (params?.refresh)    p.set('refresh',    'true');
     return apiFetch<import('../types/api').HMMRegimeResponse>(`/api/hmm-regime?${p}`);
   },
+
+  marketEntropy: (params?: { ticker?: string; days?: number; bins?: number; refresh?: boolean }) => {
+    const p = new URLSearchParams();
+    if (params?.ticker)  p.set('ticker',  params.ticker);
+    if (params?.days)    p.set('days',    String(params.days));
+    if (params?.bins)    p.set('bins',    String(params.bins));
+    if (params?.refresh) p.set('refresh', 'true');
+    return apiFetch<import('../types/api').EntropyResponse>(`/api/market/entropy?${p}`);
+  },
+
+  correlationMatrix: (params?: { benchmark?: string; window?: number; refresh?: boolean }) => {
+    const p = new URLSearchParams();
+    if (params?.benchmark) p.set('benchmark', params.benchmark);
+    if (params?.window)    p.set('window',    String(params.window));
+    if (params?.refresh)   p.set('refresh',   'true');
+    return apiFetch<import('../types/api').CorrelationMatrixResponse>(`/api/macro/correlation-matrix?${p}`);
+  },
 };

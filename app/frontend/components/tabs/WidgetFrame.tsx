@@ -17,8 +17,10 @@ import { MacroWidget }           from '../widgets/MacroWidget';
 import { SectorsWidget }         from '../widgets/SectorsWidget';
 import { NewsWidget }            from '../widgets/NewsWidget';
 import { RankingsWidget }        from '../widgets/RankingsWidget';
-import { BacktestWidget }        from '../widgets/BacktestWidget';
-import { HMMRegimeWidget }       from '../widgets/HMMRegimeWidget';
+import { BacktestWidget }               from '../widgets/BacktestWidget';
+import { HMMRegimeWidget }              from '../widgets/HMMRegimeWidget';
+import { ShannonEntropyWidget }         from '../widgets/ShannonEntropyWidget';
+import { GlobalMacroCorrelationWidget } from '../widgets/GlobalMacroCorrelationWidget';
 
 // ── Widgets that use the tab's activeTicker in their header ──
 const TICKER_WIDGETS = new Set<WidgetType>([
@@ -37,8 +39,10 @@ const WIDGET_LABELS: Record<WidgetType, string> = {
   'sectors':          'SECTORS',
   'news':             'MARKET NEWS',
   'rankings':         'RANKINGS',
-  'backtest':         'WALK-FORWARD BACKTEST',
-  'hmm-regime':       'HMM REGIME DETECTOR',
+  'backtest':           'WALK-FORWARD BACKTEST',
+  'hmm-regime':         'HMM REGIME DETECTOR',
+  'shannon-entropy':    'SHANNON ENTROPY · SYSTEMIC RISK',
+  'correlation-matrix': 'MACRO CORRELATION MATRIX',
 };
 
 interface Props {
@@ -60,8 +64,10 @@ function WidgetBody({ widget, tabId }: Props) {
     case 'news':             return <NewsWidget            tabId={tabId} />;
     case 'rankings':         return <RankingsWidget        tabId={tabId} />;
     case 'backtest':         return <BacktestWidget        tabId={tabId} />;
-    case 'hmm-regime':       return <HMMRegimeWidget       tabId={tabId} />;
-    default:                 return null;
+    case 'hmm-regime':         return <HMMRegimeWidget              tabId={tabId} />;
+    case 'shannon-entropy':    return <ShannonEntropyWidget         tabId={tabId} />;
+    case 'correlation-matrix': return <GlobalMacroCorrelationWidget tabId={tabId} />;
+    default:                   return null;
   }
 }
 

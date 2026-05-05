@@ -1,20 +1,30 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap');
 
 :root {
-  --col-bg:       #0A0A0A;
-  --col-surface:  #111111;
-  --col-elevated: #161616;
-  --col-border:   #1E1E1E;
-  --col-amber:    #FF8C00;
-  --col-cyan:     #00B4D8;
-  --col-buy:      #00FF87;
-  --col-fund:     #FFD60A;
-  --col-tech:     #00B4D8;
-  --col-fail:     #FF3B30;
-  --col-green:    #00C853;
-  --col-red:      #FF3B30;
-  --col-dim:      #6B6B6B;
-  --col-body:     #C8C8C8;
+  /* ── Deep Navy foundation (Bloomberg/FT dark) ── */
+  --col-bg:       #080E1A;
+  --col-surface:  #0D1526;
+  --col-elevated: #132035;
+  --col-border:   #1C2D45;
+
+  /* ── Accent hierarchy ── */
+  --col-amber:    #E8920A;
+  --col-cyan:     #00A8CC;
+
+  /* ── Institutional signal palette ── */
+  --col-emerald:  #00B87A;   /* buy / positive / low-noise */
+  --col-crimson:  #C0392B;   /* sell / negative / high-noise */
+  --col-buy:      #00B87A;
+  --col-fund:     #E8920A;
+  --col-tech:     #00A8CC;
+  --col-fail:     #C0392B;
+  --col-green:    #00B87A;
+  --col-red:      #C0392B;
+
+  /* ── Neutral scale ── */
+  --col-slate:    #6B82A0;   /* secondary labels */
+  --col-dim:      #4A5E78;   /* tertiary / placeholder */
+  --col-body:     #C2CDD8;   /* primary body text */
 }
 
 *, *::before, *::after {

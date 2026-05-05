@@ -1,0 +1,95 @@
+{
+  "entities": [
+    {
+      "ticker": "ADVANC.BK",
+      "name": "Advanced Info Service Public Company Limited",
+      "relationship_web": {
+        "financial": [
+          {
+            "entity": "BBL.BK",
+            "relation": "Primary Lender/Facility Agent",
+            "proportionality": "Inversely Proportional",
+            "note": "Major provider of long-term debentures and credit lines for 5G spectrum licenses and infrastructure CAPEX."
+          },
+          {
+            "entity": "SCB.BK",
+            "relation": "Joint Venture Partner (AISCB)",
+            "proportionality": "Proportional",
+            "note": "Collaboration in digital lending and the Virtual Bank consortium increases non-core revenue potential."
+          }
+        ],
+        "supply_chain": [
+          {
+            "entity": "GULF.BK",
+            "relation": "Upstream/Energy & Strategic Parent",
+            "proportionality": "Proportional",
+            "sensitivity_index": 0.9,
+            "note": "Synergy in data center power supply and smart grid initiatives; GULF is the largest shareholder (40.44%)."
+          },
+          {
+            "entity": "Ericsson/Huawei/ZTE",
+            "relation": "Upstream/Equipment Vendors",
+            "proportionality": "Inversely Proportional",
+            "sensitivity_index": 0.6,
+            "note": "Dependence on hardware imports; prices sensitive to global semiconductor supply and trade tariffs."
+          },
+          {
+            "entity": "Triple T Broadband (3BB)",
+            "relation": "Subsidiary/Integration",
+            "proportionality": "Proportional",
+            "sensitivity_index": 0.75,
+            "note": "Acquisition integration drives fixed-broadband market dominance and cross-selling synergies."
+          }
+        ],
+        "equity_cross_holdings": [
+          {
+            "entity": "Singtel (Z74.SG)",
+            "type": "Strategic Shareholder",
+            "ownership_pct": 23.32,
+            "proportionality": "Proportional"
+          },
+          {
+            "entity": "INTUCH.BK",
+            "type": "Associate (Holding)",
+            "ownership_pct": null,
+            "proportionality": "Proportional"
+          }
+        ],
+        "competitors": [
+          {
+            "ticker": "TRUE.BK",
+            "market_share_overlap": "High",
+            "proportionality": "Inversely Proportional",
+            "note": "Main rival following the TRUE-DTAC merger; intense competition for 5G/6G subscriber leadership."
+          },
+          {
+            "ticker": "NT (National Telecom)",
+            "market_share_overlap": "Low",
+            "proportionality": "Inversely Proportional",
+            "note": "Competition in government sector contracts and infrastructure wholesale."
+          }
+        ],
+        "macro_commodity_factors": [
+          {
+            "factor": "Thai THB/USD Exchange Rate",
+            "proportionality": "Inversely Proportional",
+            "impact_lag": "T+1 Month",
+            "logic": "High CAPEX for network equipment and spectrum licenses is often USD-linked or imported."
+          },
+          {
+            "factor": "Global Interest Rates (Fed/BoT)",
+            "proportionality": "Inversely Proportional",
+            "impact_lag": "Quarterly",
+            "logic": "Impacts the cost of refinancing substantial debt used for license auctions; high dividend yield stocks are sensitive to rate hikes."
+          },
+          {
+            "factor": "Domestic Consumption Index",
+            "proportionality": "Proportional",
+            "impact_lag": "T+0",
+            "logic": "Directly correlates with ARPU (Average Revenue Per User) and prepaid top-up frequency."
+          }
+        ]
+      }
+    }
+  ]
+}

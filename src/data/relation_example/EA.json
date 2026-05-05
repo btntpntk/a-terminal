@@ -1,0 +1,107 @@
+{
+  "entities": [
+    {
+      "ticker": "EA.BK",
+      "name": "Energy Absolute Public Company Limited",
+      "relationship_web": {
+        "financial": [
+          {
+            "entity": "SCB.BK",
+            "relation": "Primary Debt Registrar / Lead Underwriter",
+            "proportionality": "Inversely Proportional",
+            "note": "SCB acts as the registrar for major debenture tranches (e.g., EA269A); rising interest rates increase the servicing cost of EA's ~56bn THB total liabilities."
+          },
+          {
+            "entity": "BBL.BK",
+            "relation": "Transactional Lender / Underwriter",
+            "proportionality": "Inversely Proportional",
+            "note": "Significant exposure to EA's project financing for the Chachoengsao Gigafactory; debt-to-equity covenant pressure makes the stock sensitive to BBL's prime rate."
+          }
+        ],
+        "supply_chain": [
+          {
+            "entity": "Amita Technologies (Taiwan)",
+            "relation": "Upstream Battery Cell Partner",
+            "proportionality": "Proportional",
+            "sensitivity_index": 0.92,
+            "note": "Critical tech provider for battery cells; production yields in Taiwan directly impact the scalability of EA's domestic Giga-factory."
+          },
+          {
+            "entity": "Thai Palm Oil Producers",
+            "relation": "Upstream Feedstock Suppliers",
+            "proportionality": "Inversely Proportional",
+            "sensitivity_index": 0.85,
+            "note": "Raw material for biodiesel (B100); rising Crude Palm Oil (CPO) prices compress the marketing margin of the biodiesel segment."
+          },
+          {
+            "entity": "BEM.BK",
+            "relation": "Downstream Strategic Customer",
+            "proportionality": "Proportional",
+            "sensitivity_index": 0.78,
+            "note": "Primary demand source for electric buses through the NEX-EA ecosystem; urban transit electrification cycles drive order backlog."
+          }
+        ],
+        "equity_cross_holdings": [
+          {
+            "entity": "NEX.BK",
+            "type": "Subsidiary (EV Assembly)",
+            "ownership_pct": 77.77,
+            "proportionality": "Proportional"
+          },
+          {
+            "entity": "Amita Technologies Inc.",
+            "type": "Subsidiary (Battery Tech)",
+            "ownership_pct": 71.2,
+            "proportionality": "Proportional"
+          },
+          {
+            "entity": "Mine Mobility Research",
+            "type": "Subsidiary (EV Development)",
+            "ownership_pct": 100.0,
+            "proportionality": "Proportional"
+          }
+        ],
+        "competitors": [
+          {
+            "ticker": "GPSC.BK",
+            "market_share_overlap": "High",
+            "proportionality": "Inversely Proportional",
+            "note": "Direct competition in the Energy Storage System (ESS) and EV charging infrastructure markets."
+          },
+          {
+            "ticker": "BYD (1211.HK / Thai Importers)",
+            "market_share_overlap": "Medium",
+            "proportionality": "Inversely Proportional",
+            "note": "Dominance of Chinese EVs in the passenger segment pressures EA's commercial EV pricing power."
+          }
+        ],
+        "macro_commodity_factors": [
+          {
+            "factor": "Thailand Fuel Tariff (Ft Rate)",
+            "proportionality": "Proportional",
+            "impact_lag": "T+4 Months",
+            "logic": "Directly impacts revenue from the solar and wind power segments under long-term PPA agreements."
+          },
+          {
+            "factor": "Global Lithium Carbonate Price",
+            "proportionality": "Inversely Proportional",
+            "impact_lag": "T+3 Months",
+            "logic": "Input cost for the 1GWh battery plant; price spikes in battery-grade chemicals squeeze operational EBITDA."
+          },
+          {
+            "factor": "Brent Crude Oil Price",
+            "proportionality": "Proportional",
+            "impact_lag": "T+0 Months",
+            "logic": "High oil prices increase the relative cost-competitiveness of biodiesel and the adoption speed of commercial EVs."
+          },
+          {
+            "factor": "USD/THB Exchange Rate",
+            "proportionality": "Inversely Proportional",
+            "impact_lag": "T+0 Months",
+            "logic": "Weak THB inflates the cost of imported battery machinery and raw materials, despite benefiting minor export tranches."
+          }
+        ]
+      }
+    }
+  ]
+}
