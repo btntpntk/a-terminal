@@ -774,13 +774,13 @@ Train on the first 80% of history; predict on the last 20%. Results include per-
 | Total Return | $\frac{E_T - E_0}{E_0}$ |
 | CAGR | $\left(\frac{E_T}{E_0}\right)^{1/n_{\text{years}}} - 1$ |
 | Annualised Volatility | $\sigma_{\text{daily}} \times \sqrt{252}$ |
-| Sharpe Ratio | $\frac{\bar{r}_{\text{daily}} - r_f/252}{\sigma_{\text{daily}}} \times \sqrt{252}$ |
+| Sharpe Ratio | $\frac{\bar{r} - r_f/252}{\sigma} \times \sqrt{252}$ |
 | Max Drawdown | $\min_t \frac{E_t - \max_{s \leq t} E_s}{\max_{s \leq t} E_s}$ |
-| Calmar Ratio | $\frac{\text{CAGR}}{|\text{Max Drawdown}|}$ |
+| Calmar Ratio | $\frac{\text{CAGR}}{\lvert\text{Max Drawdown}\rvert}$ |
 | Win Rate | $\frac{\text{winning trades}}{\text{total trades}}$ |
 | Avg Win | $\mathbb{E}[r \mid r > 0]$ |
 | Avg Loss | $\mathbb{E}[r \mid r < 0]$ |
-| Reward-to-Risk | $\left|\frac{\text{Avg Win}}{\text{Avg Loss}}\right|$ |
+| Reward-to-Risk | $\lvert\frac{\text{Avg Win}}{\text{Avg Loss}}\rvert$ |
 | Avg Trade Return | $\mathbb{E}[r]$ across all closed trades |
 
 All NaN and Inf values are replaced with `None` before serialisation.
