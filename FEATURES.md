@@ -777,7 +777,7 @@ Train on the first 80% of history; predict on the last 20%. Results include per-
 | Sharpe Ratio | $\frac{\bar{r}_{\text{daily}} - r_f/252}{\sigma_{\text{daily}}} \times \sqrt{252}$ |
 | Max Drawdown | $\min_t \frac{E_t - \max_{s \leq t} E_s}{\max_{s \leq t} E_s}$ |
 | Calmar Ratio | $\frac{\text{CAGR}}{|\text{Max Drawdown}|}$ |
-| Win Rate | $\frac{\text{# trades with } r > 0}{\text{total trades}}$ |
+| Win Rate | $\frac{\text{winning trades}}{\text{total trades}}$ |
 | Avg Win | $\mathbb{E}[r \mid r > 0]$ |
 | Avg Loss | $\mathbb{E}[r \mid r < 0]$ |
 | Reward-to-Risk | $\left|\frac{\text{Avg Win}}{\text{Avg Loss}}\right|$ |
