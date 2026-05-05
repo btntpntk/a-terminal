@@ -114,8 +114,8 @@ export function useMarketEntropy(ticker = '^SET.BK', days = 30) {
   return useQuery({
     queryKey: ['market-entropy', ticker, days],
     queryFn: () => api.marketEntropy({ ticker, days }),
-    staleTime: 4 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,  // matches backend 5-min cache
+    staleTime: 55 * 1000,
+    refetchInterval: 60 * 1000,
     retry: 1,
   });
 }
@@ -124,8 +124,34 @@ export function useCorrelationMatrix(benchmark = '^SET.BK', window = 30) {
   return useQuery({
     queryKey: ['correlation-matrix', benchmark, window],
     queryFn: () => api.correlationMatrix({ benchmark, window }),
-    staleTime: 4 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,  // matches backend 5-min cache
+    staleTime: 55 * 1000,
+    refetchInterval: 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useTransferEntropy(
+  source = 'SEC_PROXY',
+  target = '^SET.BK',
+  opts?: { lag_x?: number; lag_y?: number; bins?: number; window?: number },
+) {
+  return useQuery({
+    queryKey: ['transfer-entropy', source, target, opts],
+    queryFn:  () => api.transferEntropy({ source, target, ...opts }),
+    staleTime: 55 * 1000,
+    refetchInterval: 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useSectorTEMatrix(
+  opts?: { lag?: number; bins?: number; window?: number },
+) {
+  return useQuery({
+    queryKey: ['sector-te-matrix', opts],
+    queryFn:  () => api.sectorTeMatrix(opts),
+    staleTime: 55 * 1000,
+    refetchInterval: 60 * 1000,
     retry: 1,
   });
 }

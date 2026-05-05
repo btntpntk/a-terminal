@@ -415,3 +415,38 @@ export interface CorrelationMatrixResponse {
   correlations: Record<string, DriverCorrelation>;
   timestamp:    string;
 }
+
+// Transfer Entropy — /api/analysis/transfer-entropy
+export type LeakageSignal = 'HIGH' | 'MODERATE' | 'REVERSE' | 'NONE';
+
+export interface TEPoint { date: string; te: number }
+
+export interface TransferEntropyResponse {
+  source:         string;
+  target:         string;
+  te_x_to_y:      number;
+  te_y_to_x:      number;
+  net_flow:       number;
+  normalized_te:  number;
+  h_target:       number;
+  leakage_signal: LeakageSignal;
+  interpretation: string;
+  lag_x:          number;
+  lag_y:          number;
+  bins:           number;
+  window:         number;
+  n_obs:          number;
+  series:         TEPoint[];
+  timestamp:      string;
+}
+
+// Sector TE Matrix — /api/analysis/sector-te-matrix
+export interface SectorTEMatrixResponse {
+  sectors:   string[];
+  tickers:   Record<string, string>;
+  matrix:    Record<string, Record<string, number | null>>;
+  lag:       number;
+  bins:      number;
+  window:    number;
+  timestamp: string;
+}

@@ -1728,7 +1728,7 @@ async def get_market_entropy(
     try:
         result = await asyncio.to_thread(_compute)
         result = _clean_floats(result)
-        cache.set(cache_key, result, ttl_seconds=300)
+        cache.set(cache_key, result, ttl_seconds=60)
         return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -1851,9 +1851,258 @@ async def get_correlation_matrix(
     try:
         result = await asyncio.to_thread(_compute)
         result = _clean_floats(result)
-        cache.set(cache_key, result, ttl_seconds=300)
+        cache.set(cache_key, result, ttl_seconds=60)
         return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Correlation matrix failed: {exc}")
+
+
+# ─────────────────────────────────────────────────────────────
+# ROUTES — TRANSFER ENTROPY (Information Flow Engine)
+# ─────────────────────────────────────────────────────────────
+
+SET50_SECTOR_REPS: dict[str, str] = {
+    'ADVANC':'ADVANC.BK','AOT':'AOT.BK','AWC':'AWC.BK','BANPU':'BANPU.BK','BBL':'BBL.BK','BDMS':'BDMS.BK','BEM':'BEM.BK','BH':'BH.BK','BJC':'BJC.BK','BTS':'BTS.BK','CBG':'CBG.BK','CCET':'CCET.BK','CENTEL':'CENTEL.BK','COM7':'COM7.BK','CPALL':'CPALL.BK','CPF':'CPF.BK','CPN':'CPN.BK','CRC':'CRC.BK','DELTA':'DELTA.BK','EGCO':'EGCO.BK','GPSC':'GPSC.BK','GULF':'GULF.BK','HMPRO':'HMPRO.BK','IVL':'IVL.BK','KBANK':'KBANK.BK','KKP':'KKP.BK','KTB':'KTB.BK','KTC':'KTC.BK','LH':'LH.BK','MINT':'MINT.BK','MTC':'MTC.BK','OR':'OR.BK','OSP':'OSP.BK','PTT':'PTT.BK','PTTEP':'PTTEP.BK','PTTGC':'PTTGC.BK','RATCH':'RATCH.BK','SAWAD':'SAWAD.BK','SCB':'SCB.BK','SCC':'SCC.BK','SCGP':'SCGP.BK','TCAP':'TCAP.BK','TIDLOR':'TIDLOR.BK','TISCO':'TISCO.BK','TLI':'TLI.BK','TOP':'TOP.BK','TRUE':'TRUE.BK','TTB':'TTB.BK','TU':'TU.BK','WHA':'WHA.BK'
+}
+
+@app.get("/api/analysis/transfer-entropy", tags=["Analysis"])
+async def get_transfer_entropy(
+    source:  str  = Query("SEC_PROXY",  description="Source ticker or 'SEC_PROXY' for volume-anomaly binary signal"),
+    target:  str  = Query("^SET.BK",    description="Target ticker for price action"),
+    lag_x:   int  = Query(1, ge=1, le=5, description="Source memory order (bars)"),
+    lag_y:   int  = Query(1, ge=1, le=5, description="Target autoregressive order (bars)"),
+    bins:    int  = Query(3, ge=2, le=6,  description="Ordinal discretisation bins for continuous returns"),
+    window:  int  = Query(60, ge=20, le=252, description="Rolling TE estimation window (trading days)"),
+    refresh: bool = Query(False),
+):
+    """
+    Transfer Entropy TE(X→Y) = H(Y_{t+1} | Y_t^k) − H(Y_{t+1} | Y_t^k, X_t^l).
+    Quantifies directed information flow from X to Y beyond Y's own autocorrelation.
+
+    source='SEC_PROXY': binary anomaly proxy — abnormal volume (|Z|>2σ) OR large price gap
+    (|return Z|>2.5σ) — a yfinance-only approximation for SEC information-event leakage.
+
+    Symbolic dynamics: continuous returns discretised into ordinal quantile bins.
+    Cached 5 minutes.
+    """
+    cache_key = f"te_{source}_{target}_{lag_x}_{lag_y}_{bins}_{window}"
+    if not refresh:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+    def _compute():
+        import yfinance as yf
+        import numpy as np
+        import pandas as pd
+
+        def _discretize(arr: "np.ndarray", n_bins: int) -> "np.ndarray":
+            edges = np.quantile(arr, np.linspace(0, 1, n_bins + 1))
+            edges[0] -= 1e-10; edges[-1] += 1e-10
+            return np.digitize(arr, edges[1:-1]).astype(np.int32)
+
+        def _te(x: "np.ndarray", y: "np.ndarray", kx: int, ky: int,
+                xs: int, ys: int) -> float:
+            """Vectorised TE(X→Y) via joint frequency counting over symbolic sequences."""
+            n = len(y); min_lag = max(kx, ky); T = n - min_lag
+            if T < 5:
+                return float("nan")
+            y_fut = y[min_lag:]
+            yp = np.zeros(T, dtype=np.int64)
+            for j in range(ky):
+                yp = yp * ys + y[min_lag - ky + j: n - ky + j]
+            xp = np.zeros(T, dtype=np.int64)
+            for j in range(kx):
+                xp = xp * xs + x[min_lag - kx + j: n - kx + j]
+            yp_s = ys ** ky; xp_s = xs ** kx
+            idx  = (y_fut.astype(np.int64) * yp_s + yp) * xp_s + xp
+            p3   = np.bincount(idx, minlength=ys * yp_s * xp_s).reshape(ys, yp_s, xp_s) / T
+            p_yy = p3.sum(axis=2); p_xy = p3.sum(axis=0); p_yp = p_yy.sum(axis=0)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                c_yx = np.where(p_xy[np.newaxis] > 0, p3 / p_xy[np.newaxis], 0.0)
+                c_y  = np.where(p_yp[np.newaxis, :, np.newaxis] > 0,
+                                p_yy[:, :, np.newaxis] / p_yp[np.newaxis, :, np.newaxis], 0.0)
+                lr   = np.where((c_yx > 0) & (c_y > 0), np.log2(c_yx) - np.log2(c_y), 0.0)
+            return float(max(0.0, np.sum(p3 * lr)))
+
+        USE_SEC = source.upper() == "SEC_PROXY"
+        tickers = [target] if USE_SEC else list({source, target})
+        raw = yf.download(tickers, period="1y", progress=False, auto_adjust=True)
+        if raw.empty:
+            raise ValueError("No data from yfinance")
+
+        closes  = raw["Close"]  if isinstance(raw.columns, pd.MultiIndex) else raw
+        volumes = raw["Volume"] if isinstance(raw.columns, pd.MultiIndex) else raw
+
+        if target not in closes.columns:
+            raise ValueError(f"Target {target} unavailable")
+
+        tgt_ret = closes[target].squeeze().pct_change().dropna()
+
+        if USE_SEC:
+            vol = volumes[target].squeeze().reindex(tgt_ret.index).dropna()
+            r20 = vol.rolling(20, min_periods=10)
+            vz  = (vol - r20.mean()) / (r20.std() + 1e-12)
+            rz  = (tgt_ret - tgt_ret.rolling(20, min_periods=10).mean()) \
+                  / (tgt_ret.rolling(20, min_periods=10).std() + 1e-12)
+            src_raw = ((vz.abs() > 2.0) | (rz.abs() > 2.5)).astype(int)
+        else:
+            if source not in closes.columns:
+                raise ValueError(f"Source {source} unavailable")
+            src_raw = closes[source].squeeze().pct_change().dropna()
+
+        df = pd.concat([src_raw.rename("X"), tgt_ret.rename("Y")], axis=1).dropna()
+        if len(df) < window + max(lag_x, lag_y) + 5:
+            raise ValueError(f"Insufficient data ({len(df)} bars)")
+
+        x_raw = df["X"].values; y_raw = df["Y"].values; dates = df.index
+        x_disc = x_raw.astype(np.int32) if USE_SEC else _discretize(x_raw, bins)
+        y_disc = _discretize(y_raw, bins)
+        xs = int(x_disc.max()) + 1; ys = int(y_disc.max()) + 1
+
+        te_xy  = _te(x_disc, y_disc, lag_x, lag_y, xs, ys)
+        te_yx  = _te(y_disc, x_disc, lag_y, lag_x, ys, xs)
+        net    = te_xy - te_yx
+        y_prob = np.bincount(y_disc) / len(y_disc)
+        y_prob = y_prob[y_prob > 0]
+        h_y    = float(-np.sum(y_prob * np.log2(y_prob)))
+        norm_te = (te_xy / h_y) if h_y > 0 else 0.0
+
+        n_total = len(x_disc)
+        series: list[dict] = []
+        for i in range(max(window, n_total - 90), n_total):
+            sl_x = x_disc[max(0, i - window): i]
+            sl_y = y_disc[max(0, i - window): i]
+            if len(sl_x) < max(lag_x + lag_y + 5, window // 3):
+                continue
+            v = _te(sl_x, sl_y, lag_x, lag_y, int(sl_x.max()) + 1, int(sl_y.max()) + 1)
+            if not math.isnan(v):
+                series.append({"date": dates[i].strftime("%Y-%m-%d"), "te": round(v, 6)})
+
+        thr_hi = 0.05 * h_y; thr_md = 0.02 * h_y
+        if te_xy >= thr_hi and net > 0:
+            leakage, interp = "HIGH",     "Strong directed flow — potential pre-event price drift"
+        elif te_xy >= thr_md and net > 0:
+            leakage, interp = "MODERATE", "Measurable flow — monitor for accumulation patterns"
+        elif net < -thr_md:
+            leakage, interp = "REVERSE",  "Price leads signal — market discounts event in advance"
+        else:
+            leakage, interp = "NONE",     "No significant directed information flow detected"
+
+        return {
+            "source": source, "target": target,
+            "te_x_to_y": round(te_xy, 6), "te_y_to_x": round(te_yx, 6),
+            "net_flow": round(net, 6), "normalized_te": round(norm_te, 4),
+            "h_target": round(h_y, 4), "leakage_signal": leakage,
+            "interpretation": interp, "lag_x": lag_x, "lag_y": lag_y,
+            "bins": bins, "window": window, "n_obs": n_total, "series": series,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+    try:
+        result = await asyncio.to_thread(_compute)
+        result = _clean_floats(result)
+        cache.set(cache_key, result, ttl_seconds=60)
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Transfer entropy failed: {exc}")
+
+
+@app.get("/api/analysis/sector-te-matrix", tags=["Analysis"])
+async def get_sector_te_matrix(
+    lag:     int  = Query(1, ge=1, le=3,    description="Lag order for all pairwise TE computations"),
+    bins:    int  = Query(3, ge=2, le=5,    description="Ordinal discretisation bins"),
+    window:  int  = Query(60, ge=30, le=252, description="Estimation window in trading days"),
+    refresh: bool = Query(False),
+):
+    """
+    Pairwise Transfer Entropy matrix between SET50 sector representatives (KBANK, PTT, CPALL, CPN, SCC).
+    matrix[source][target] = TE(source → target). Diagonal = null.
+    Identifies which sectors lead information flow into others.
+    Cached 5 minutes.
+    """
+    cache_key = f"sector_te_{lag}_{bins}_{window}"
+    if not refresh:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+    def _compute():
+        import yfinance as yf
+        import numpy as np
+        import pandas as pd
+
+        def _discretize(arr: "np.ndarray", n_bins: int) -> "np.ndarray":
+            edges = np.quantile(arr, np.linspace(0, 1, n_bins + 1))
+            edges[0] -= 1e-10; edges[-1] += 1e-10
+            return np.digitize(arr, edges[1:-1]).astype(np.int32)
+
+        def _te(x: "np.ndarray", y: "np.ndarray", k: int, xs: int, ys: int) -> float:
+            n = len(y); T = n - k
+            if T < 5:
+                return float("nan")
+            y_fut = y[k:]
+            yp = np.zeros(T, dtype=np.int64); xp = np.zeros(T, dtype=np.int64)
+            for j in range(k):
+                yp = yp * ys + y[j: n - k + j]
+                xp = xp * xs + x[j: n - k + j]
+            yp_s = ys ** k; xp_s = xs ** k
+            idx  = (y_fut.astype(np.int64) * yp_s + yp) * xp_s + xp
+            p3   = np.bincount(idx, minlength=ys * yp_s * xp_s).reshape(ys, yp_s, xp_s) / T
+            p_yy = p3.sum(axis=2); p_xy = p3.sum(axis=0); p_yp = p_yy.sum(axis=0)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                c_yx = np.where(p_xy[np.newaxis] > 0, p3 / p_xy[np.newaxis], 0.0)
+                c_y  = np.where(p_yp[np.newaxis, :, np.newaxis] > 0,
+                                p_yy[:, :, np.newaxis] / p_yp[np.newaxis, :, np.newaxis], 0.0)
+                lr   = np.where((c_yx > 0) & (c_y > 0), np.log2(c_yx) - np.log2(c_y), 0.0)
+            return float(max(0.0, np.sum(p3 * lr)))
+
+        tickers = list(SET50_SECTOR_REPS.values())
+        raw = yf.download(tickers, period="5d", progress=False, auto_adjust=True, interval="1m")
+        if raw.empty:
+            raise ValueError("No data for sector matrix")
+
+        closes  = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+        returns = closes.pct_change().dropna(how="all")
+
+        matrix: dict[str, dict[str, float | None]] = {}
+        for src_name, src_ticker in SET50_SECTOR_REPS.items():
+            matrix[src_name] = {}
+            for tgt_name, tgt_ticker in SET50_SECTOR_REPS.items():
+                if src_name == tgt_name:
+                    matrix[src_name][tgt_name] = None; continue
+                try:
+                    if src_ticker not in returns.columns or tgt_ticker not in returns.columns:
+                        matrix[src_name][tgt_name] = None; continue
+                    aligned = pd.concat([
+                        returns[src_ticker].dropna().rename("X"),
+                        returns[tgt_ticker].dropna().rename("Y"),
+                    ], axis=1).dropna().tail(window)
+                    if len(aligned) < lag + 10:
+                        matrix[src_name][tgt_name] = None; continue
+                    xd = _discretize(aligned["X"].values, bins)
+                    yd = _discretize(aligned["Y"].values, bins)
+                    v  = _te(xd, yd, lag, int(xd.max()) + 1, int(yd.max()) + 1)
+                    matrix[src_name][tgt_name] = round(v, 6) if not math.isnan(v) else None
+                except Exception:
+                    matrix[src_name][tgt_name] = None
+
+        return {
+            "sectors": list(SET50_SECTOR_REPS.keys()), "tickers": SET50_SECTOR_REPS,
+            "matrix": matrix, "lag": lag, "bins": bins, "window": window,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+    try:
+        result = await asyncio.to_thread(_compute)
+        result = _clean_floats(result)
+        cache.set(cache_key, result, ttl_seconds=60)
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Sector TE matrix failed: {exc}")

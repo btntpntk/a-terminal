@@ -109,6 +109,10 @@ export function ShannonEntropyWidget({ tabId: _ }: Props) {
         <span style={{ fontSize: 9, color: 'var(--col-slate)', letterSpacing: '1px' }}>
           30-DAY RETURN DISTRIBUTION · H = -Σ p log₂p
         </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span className="live-dot" />
+          <span style={{ fontSize: 9, color: 'var(--col-emerald)' }}>LIVE · 60s</span>
+        </span>
         <button onClick={refresh} style={{ background: 'none', border: 'none', color: 'var(--col-dim)', cursor: 'pointer', fontSize: 13 }} title="Refresh">↺</button>
       </div>
 
