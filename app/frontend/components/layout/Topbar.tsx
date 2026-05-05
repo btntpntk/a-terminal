@@ -27,7 +27,7 @@ export function Topbar() {
 
   return (
     <header className="topbar">
-      <span className="logo">ALPHAS</span>
+      <span className="logo">TERMINAL</span>
 
       <div className="topbar-right">
         <span className="clock">{clock}</span>

@@ -130,6 +130,16 @@ export function useCorrelationMatrix(benchmark = '^SET.BK', window = 30) {
   });
 }
 
+export function useTickerFundamentals(ticker: string | null) {
+  return useQuery({
+    queryKey: ['ticker-fundamentals', ticker],
+    queryFn:  () => api.tickerFundamentals(ticker!),
+    enabled:  !!ticker,
+    staleTime: 55 * 60 * 1000,
+    retry: 1,
+  });
+}
+
 export function useTransferEntropy(
   source = 'SEC_PROXY',
   target = '^SET.BK',

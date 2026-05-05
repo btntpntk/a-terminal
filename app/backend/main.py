@@ -773,6 +773,105 @@ async def get_ticker_info(ticker: str):
 
 
 # ─────────────────────────────────────────────────────────────
+# ROUTES — TICKER FUNDAMENTALS (on-demand per-ticker)
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/api/ticker/fundamentals/{ticker}", tags=["Ticker"])
+async def get_ticker_fundamentals(ticker: str):
+    """
+    Run fundamental analysis (Stage 3) for a single ticker on-demand.
+    Returns alpha_score, ROIC, WACC, Altman Z, Sloan, FCF quality, moat, etc.
+    Cached for 1 hour.
+    """
+    cache_key = f"fundamentals_{ticker}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    import yfinance as yf
+    from src.agents.calculator import (
+        calculate_sloan_ratio,
+        calculate_roic,
+        calculate_wacc,
+        calculate_fcf_quality,
+        calculate_altman_z,
+        calculate_asset_turnover,
+        calculate_ccc,
+        generate_alpha_score,
+    )
+
+    def _fetch():
+        tk         = yf.Ticker(ticker)
+        info       = dict(tk.info)
+        financials = tk.financials
+        balance    = tk.balance_sheet
+        cashflow   = tk.cashflow
+        hist       = tk.history(period="2y", interval="1d", auto_adjust=True)
+
+        closes  = hist["Close"].dropna()
+        returns = closes.pct_change().dropna()
+        beta    = float(info.get("beta", 1.0) or 1.0)
+        sortino = 0.0
+        if len(returns) > 20:
+            neg          = returns[returns < 0]
+            downside_vol = float(neg.std() * (252 ** 0.5)) if len(neg) > 1 else 1e-6
+            ann_ret      = float(returns.mean() * 252)
+            sortino      = ann_ret / downside_vol if downside_vol > 0 else 0.0
+
+        roic        = calculate_roic(financials, balance)
+        wacc        = calculate_wacc(info, financials, balance, cashflow)
+        sloan       = calculate_sloan_ratio(financials, cashflow, balance)
+        fcf_quality = calculate_fcf_quality(financials, cashflow)
+        z_score     = calculate_altman_z(financials, balance, info)
+        asset_to    = calculate_asset_turnover(financials, balance)
+        ccc         = calculate_ccc(financials, balance)
+
+        alpha  = generate_alpha_score(
+            roic=roic, wacc=wacc, sloan=sloan, z_score=z_score,
+            sortino=sortino, beta=beta, fcf_quality=fcf_quality,
+            composite_risk=50.0, sector_macro_adj=0,
+        )
+        spread = roic - wacc
+
+        if spread > 0.10:    moat   = "WIDE"
+        elif spread > 0.05:  moat   = "NARROW"
+        elif spread > 0:     moat   = "MARGINAL"
+        else:                moat   = "NONE"
+
+        if z_score > 2.99:   z_zone = "SAFE"
+        elif z_score > 1.81: z_zone = "GREY"
+        else:                z_zone = "DISTRESS"
+
+        if alpha >= 75:      signal = "STRONG_BUY"
+        elif alpha >= 55:    signal = "BUY"
+        elif alpha >= 40:    signal = "NEUTRAL"
+        elif alpha >= 25:    signal = "SELL"
+        else:                signal = "STRONG_SELL"
+
+        return _clean_floats({
+            "ticker":                ticker,
+            "alpha_score":           round(alpha, 2),
+            "signal":                signal,
+            "roic":                  round(roic, 4),
+            "wacc":                  round(wacc, 4),
+            "roic_wacc_spread":      round(spread, 4),
+            "moat":                  moat,
+            "sloan_ratio":           round(sloan, 4),
+            "fcf_quality":           round(fcf_quality, 4),
+            "altman_z":              round(z_score, 4),
+            "altman_zone":           z_zone,
+            "asset_turnover":        round(asset_to, 4),
+            "cash_conversion_cycle": round(ccc, 2),
+            "sortino":               round(sortino, 4),
+            "beta":                  round(beta, 4),
+        })
+
+    result = await asyncio.to_thread(_fetch)
+    cache.set(cache_key, result, ttl_seconds=3600)
+    return result
+
+
+# ─────────────────────────────────────────────────────────────
 # ROUTES — BACKTESTING
 # ─────────────────────────────────────────────────────────────
 

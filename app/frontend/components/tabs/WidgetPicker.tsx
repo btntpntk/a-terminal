@@ -20,6 +20,7 @@ const WIDGET_OPTIONS: WidgetOption[] = [
   { group: 'TICKER',     type: 'ticker-info',       label: 'Ticker Info',        desc: 'Quick metrics — price, volume, sector sparkline' },
   { group: 'TICKER',     type: 'ticker-profile',    label: 'Ticker Profile',     desc: 'Valuation, fundamentals, analyst consensus' },
   { group: 'TICKER',     type: 'price-target',      label: 'Price Target Chart', desc: 'Interactive candlestick + volume chart' },
+  { group: 'TICKER',     type: 'fundamental',       label: 'Fundamentals',       desc: 'Alpha score, ROIC/WACC, Sloan, Altman Z, FCF quality — Stage 3 analysis' },
   { group: 'TICKER',     type: 'historical-price',  label: 'Historical Price',   desc: 'Full OHLCV table — 1 year of daily bars' },
   // Lists
   { group: 'LISTS',      type: 'watchlist',         label: 'Watchlist',          desc: 'Custom tickers — day/week/month/year %' },

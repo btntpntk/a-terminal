@@ -102,6 +102,17 @@ function SectorMatrix() {
       return next;
     });
 
+  const hasMatchingCell = (s: string) =>
+    sectors.some(t => {
+      if (t === s) return false;
+      const rowLvl = teLevel(matrix[s]?.[t] ?? 0, maxVal);
+      const colLvl = teLevel(matrix[t]?.[s] ?? 0, maxVal);
+      return (rowLvl !== 'NONE' && selected.has(rowLvl as Exclude<TELevel, 'NONE'>)) ||
+             (colLvl !== 'NONE' && selected.has(colLvl as Exclude<TELevel, 'NONE'>));
+    });
+
+  const visibleSectors = sectors.filter(hasMatchingCell);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div style={{
@@ -123,6 +134,10 @@ function SectorMatrix() {
             }}>{lvl}</button>
           );
         })}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span className="live-dot" />
+          <span style={{ fontSize: 8, color: 'var(--col-emerald)' }}>60s</span>
+        </span>
         <button
           onClick={() => qc.invalidateQueries({ queryKey: ['sector-te-matrix'] })}
           style={{ background: 'none', border: 'none', color: 'var(--col-dim)', cursor: 'pointer', fontSize: 13 }}
@@ -131,44 +146,48 @@ function SectorMatrix() {
       </div>
 
       <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-          <thead>
-            <tr>
-              <th style={{ width: 52, padding: '3px 6px', fontSize: 8, color: 'var(--col-slate)', textAlign: 'left' }}>SRC↓ TGT→</th>
-              {sectors.map(s => (
-                <th key={s} style={{ padding: '3px 4px', fontSize: 9, fontWeight: 700, color: 'var(--col-amber)', textAlign: 'center', letterSpacing: '0.3px' }}>{s}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sectors.map(src => (
-              <tr key={src}>
-                <td style={{ padding: '3px 6px', fontSize: 9, fontWeight: 700, color: 'var(--col-body)', whiteSpace: 'nowrap' }}>{src}</td>
-                {sectors.map(tgt => {
-                  const v    = src === tgt ? null : (matrix[src]?.[tgt] ?? null);
-                  const lvl  = v != null ? teLevel(v, maxVal) : 'NONE';
-                  const show = v != null && lvl !== 'NONE' && selected.has(lvl as Exclude<TELevel, 'NONE'>);
-                  return (
-                    <td
-                      key={tgt}
-                      title={v != null ? `${data.tickers[src]} → ${data.tickers[tgt]}` : undefined}
-                      style={{
-                        padding: '5px 2px', textAlign: 'center', fontSize: 9, fontWeight: 600,
-                        background: show ? teLevelColor(lvl) : '#0a0f1a',
-                        color: show ? 'var(--col-body)' : 'var(--col-dim)',
-                        border: '1px solid var(--col-border)',
-                        opacity: v != null && lvl !== 'NONE' && !show ? 0.25 : 1,
-                        transition: 'opacity 0.15s, background 0.15s',
-                      }}
-                    >
-                      {v != null && lvl !== 'NONE' ? v.toFixed(3) : ''}
-                    </td>
-                  );
-                })}
+        {visibleSectors.length === 0 ? (
+          <div className="widget-loading">No sectors match the selected level(s)</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <thead>
+              <tr>
+                <th style={{ width: 52, padding: '3px 6px', fontSize: 8, color: 'var(--col-slate)', textAlign: 'left' }}>SRC↓ TGT→</th>
+                {visibleSectors.map(s => (
+                  <th key={s} style={{ padding: '3px 4px', fontSize: 9, fontWeight: 700, color: 'var(--col-amber)', textAlign: 'center', letterSpacing: '0.3px' }}>{s}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {visibleSectors.map(src => (
+                <tr key={src}>
+                  <td style={{ padding: '3px 6px', fontSize: 9, fontWeight: 700, color: 'var(--col-body)', whiteSpace: 'nowrap' }}>{src}</td>
+                  {visibleSectors.map(tgt => {
+                    const v    = src === tgt ? null : (matrix[src]?.[tgt] ?? null);
+                    const lvl  = v != null ? teLevel(v, maxVal) : 'NONE';
+                    const show = v != null && lvl !== 'NONE' && selected.has(lvl as Exclude<TELevel, 'NONE'>);
+                    return (
+                      <td
+                        key={tgt}
+                        title={v != null ? `${data.tickers[src]} → ${data.tickers[tgt]}` : undefined}
+                        style={{
+                          padding: '5px 2px', textAlign: 'center', fontSize: 9, fontWeight: 600,
+                          background: show ? teLevelColor(lvl) : '#0a0f1a',
+                          color: show ? 'var(--col-body)' : 'var(--col-dim)',
+                          border: '1px solid var(--col-border)',
+                          opacity: v != null && lvl !== 'NONE' && !show ? 0.25 : 1,
+                          transition: 'opacity 0.15s, background 0.15s',
+                        }}
+                      >
+                        {v != null && lvl !== 'NONE' ? v.toFixed(3) : ''}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

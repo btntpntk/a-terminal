@@ -22,10 +22,11 @@ import { HMMRegimeWidget }              from '../widgets/HMMRegimeWidget';
 import { ShannonEntropyWidget }         from '../widgets/ShannonEntropyWidget';
 import { GlobalMacroCorrelationWidget } from '../widgets/GlobalMacroCorrelationWidget';
 import { TransferEntropyWidget }         from '../widgets/TransferEntropyWidget';
+import { FundamentalWidget }            from '../widgets/FundamentalWidget';
 
 // ── Widgets that use the tab's activeTicker in their header ──
 const TICKER_WIDGETS = new Set<WidgetType>([
-  'historical-price', 'price-target', 'ticker-profile', 'ticker-info', 'watchlist',
+  'historical-price', 'price-target', 'ticker-profile', 'ticker-info', 'watchlist', 'fundamental',
 ]);
 
 const WIDGET_LABELS: Record<WidgetType, string> = {
@@ -45,6 +46,7 @@ const WIDGET_LABELS: Record<WidgetType, string> = {
   'shannon-entropy':    'SHANNON ENTROPY · SYSTEMIC RISK',
   'correlation-matrix': 'MACRO CORRELATION MATRIX',
   'transfer-entropy':   'TRANSFER ENTROPY · INFORMATION FLOW',
+  'fundamental':        'FUNDAMENTALS · STAGE 3',
 };
 
 interface Props {
@@ -70,6 +72,7 @@ function WidgetBody({ widget, tabId }: Props) {
     case 'shannon-entropy':    return <ShannonEntropyWidget         tabId={tabId} />;
     case 'correlation-matrix': return <GlobalMacroCorrelationWidget tabId={tabId} />;
     case 'transfer-entropy':   return <TransferEntropyWidget        tabId={tabId} />;
+    case 'fundamental':        return <FundamentalWidget            tabId={tabId} />;
     default:                   return null;
   }
 }

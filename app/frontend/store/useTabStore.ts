@@ -27,6 +27,7 @@ const DEFAULT_WIDGET_SIZES: Record<WidgetType, { w: number; h: number }> = {
   'shannon-entropy':    { w: 4,  h: 10 },
   'correlation-matrix': { w: 7,  h: 10 },
   'transfer-entropy':   { w: 8,  h: 12 },
+  'fundamental':        { w: 4,  h: 13 },
 };
 
 /** Used by addTab() when the user clicks "+". */

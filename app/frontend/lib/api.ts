@@ -54,6 +54,11 @@ export const api = {
       `/api/ticker/profile/${encodeURIComponent(ticker)}`
     ),
 
+  tickerFundamentals: (ticker: string) =>
+    apiFetch<import('../types/api').TickerFundamentalsResponse>(
+      `/api/ticker/fundamentals/${encodeURIComponent(ticker)}`
+    ),
+
   tickerInfo: (ticker: string) =>
     apiFetch<{
       ticker: string; price: number | null; change: number | null;

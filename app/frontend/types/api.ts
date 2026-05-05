@@ -440,6 +440,29 @@ export interface TransferEntropyResponse {
   timestamp:      string;
 }
 
+// Ticker Fundamentals — /api/ticker/fundamentals/{ticker}
+export type FundamentalSignal = 'STRONG_BUY' | 'BUY' | 'NEUTRAL' | 'SELL' | 'STRONG_SELL';
+export type MoatRating        = 'WIDE' | 'NARROW' | 'MARGINAL' | 'NONE';
+export type AltmanZone        = 'SAFE' | 'GREY' | 'DISTRESS';
+
+export interface TickerFundamentalsResponse {
+  ticker:                string;
+  alpha_score:           number;
+  signal:                FundamentalSignal;
+  roic:                  number | null;
+  wacc:                  number | null;
+  roic_wacc_spread:      number | null;
+  moat:                  MoatRating;
+  sloan_ratio:           number | null;
+  fcf_quality:           number | null;
+  altman_z:              number | null;
+  altman_zone:           AltmanZone;
+  asset_turnover:        number | null;
+  cash_conversion_cycle: number | null;
+  sortino:               number | null;
+  beta:                  number | null;
+}
+
 // Sector TE Matrix — /api/analysis/sector-te-matrix
 export interface SectorTEMatrixResponse {
   sectors:   string[];
