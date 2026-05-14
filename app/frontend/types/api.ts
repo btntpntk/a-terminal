@@ -478,6 +478,34 @@ export interface TickerFundamentalsResponse {
   beta:                  number | null;
 }
 
+// Deep Dive — /api/deep-dive/*
+export interface TradeMarker { date: string; type: 'buy' | 'sell' | 'stop' }
+
+export interface DeepDiveStrategyResult {
+  strategy:        string;
+  metrics:         BacktestMetrics | null;
+  equity_curve:    Record<string, number>;
+  benchmark_curve: Record<string, number>;
+  trade_markers:   TradeMarker[];
+  error?:          string;
+}
+
+export interface DeepDiveStreamEvent {
+  type:             'result' | 'progress';
+  completed:        number;
+  total:            number;
+  // 'result' fields
+  strategy?:        string;
+  metrics?:         BacktestMetrics | null;
+  equity_curve?:    Record<string, number>;
+  benchmark_curve?: Record<string, number>;
+  trade_markers?:   TradeMarker[];
+  error?:           string;
+  // 'progress' fields
+  current_strategy?: string | null;
+  status?:           string;
+}
+
 // Sector TE Matrix — /api/analysis/sector-te-matrix
 export interface SectorTEMatrixResponse {
   sectors:   string[];

@@ -51,13 +51,18 @@ def run_backtest(
         step_size = out_of_sample_window
 
     n = len(prices)
-    # Validate minimum folds
+    # If the default IS/OOS don't fit, scale them down while preserving their ratio
     required = in_sample_window + MIN_FOLDS * out_of_sample_window
     if n < required:
-        raise ValueError(
-            f"Price history too short: {n} days. Need at least {required} days "
-            f"for {MIN_FOLDS} complete folds (IS={in_sample_window}, OOS={out_of_sample_window})."
-        )
+        _ratio               = in_sample_window / out_of_sample_window
+        out_of_sample_window = max(10, int(n / (_ratio + MIN_FOLDS)))
+        in_sample_window     = n - MIN_FOLDS * out_of_sample_window
+        step_size            = out_of_sample_window
+        if in_sample_window < 30:
+            raise ValueError(
+                f"Price history too short: {n} days. "
+                f"Need at least {30 + MIN_FOLDS * 10} days for {MIN_FOLDS} folds."
+            )
 
     # Build fold boundaries
     folds: list[tuple[int, int, int, int]] = []  # (train_start, train_end, test_start, test_end)

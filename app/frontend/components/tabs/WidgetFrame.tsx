@@ -24,6 +24,7 @@ import { GlobalMacroCorrelationWidget } from '../widgets/GlobalMacroCorrelationW
 import { TransferEntropyWidget }         from '../widgets/TransferEntropyWidget';
 import { FundamentalWidget }            from '../widgets/FundamentalWidget';
 import { HurstWidget }                  from '../widgets/HurstWidget';
+import { TickerDeepDiveWidget }         from '../widgets/TickerDeepDiveWidget';
 
 // ── Widgets that use the tab's activeTicker in their header ──
 const TICKER_WIDGETS = new Set<WidgetType>([
@@ -49,6 +50,7 @@ const WIDGET_LABELS: Record<WidgetType, string> = {
   'transfer-entropy':   'TRANSFER ENTROPY · INFORMATION FLOW',
   'fundamental':        'FUNDAMENTALS · STAGE 3',
   'hurst-exponent':     'HURST EXPONENT · MARKET REGIME',
+  'ticker-deep-dive':   'TICKER DEEP DIVE · ALL STRATEGIES',
 };
 
 interface Props {
@@ -76,6 +78,7 @@ function WidgetBody({ widget, tabId }: Props) {
     case 'transfer-entropy':   return <TransferEntropyWidget        tabId={tabId} />;
     case 'fundamental':        return <FundamentalWidget            tabId={tabId} />;
     case 'hurst-exponent':     return <HurstWidget                  tabId={tabId} />;
+    case 'ticker-deep-dive':   return <TickerDeepDiveWidget         tabId={tabId} />;
     default:                   return null;
   }
 }

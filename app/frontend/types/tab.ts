@@ -18,7 +18,8 @@ export type WidgetType =
   | 'correlation-matrix'
   | 'transfer-entropy'
   | 'fundamental'
-  | 'hurst-exponent';
+  | 'hurst-exponent'
+  | 'ticker-deep-dive';
 
 export interface WidgetConfig {
   id: string;     // matches LayoutItem 'i'

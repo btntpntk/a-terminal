@@ -27,20 +27,19 @@ poetry install
 # Run backend (from app/backend/)
 cd app/backend && poetry run uvicorn main:app --reload --port 8000
 
-# CLI — single ticker analysis
-poetry run python -m src.cli.cli4
-
-# CLI — full universe scan to ranked table
-poetry run python -m src.cli.cli_ranking
-
 # Linting / formatting
 poetry run black src/ app/backend/
 poetry run isort src/ app/backend/
 poetry run flake8 src/ app/backend/
 
-# Run tests
+# Run all tests
 poetry run pytest
+
+# Run a single test file
+poetry run pytest src/path/to/test_file.py -v
 ```
+
+**Note:** `src/cli/` does not exist. Any `poetry run python -m src.cli.*` references in older notes are stale.
 
 ### Frontend (from app/frontend/)
 
@@ -59,18 +58,40 @@ npm run lint       # ESLint, max-warnings 0
 alphas/
 ├── app/
 │   ├── backend/
-│   │   ├── main.py          # ALL FastAPI routes (~1250 lines)
+│   │   ├── main.py          # ALL FastAPI routes (~2200 lines)
 │   │   ├── schemas.py       # Pydantic v2 response models
 │   │   ├── pipeline.py      # Pure-function adapter calling each pipeline stage
 │   │   └── cache.py         # Thread-safe in-memory TTL cache
-│   └── frontend/
+│   └── frontend/            # Most source lives here directly
+│       ├── src/main.tsx         # React entry point — mounts App into #root
 │       ├── App.tsx              # Root shell — tab bar + react-grid-layout
-│       ├── components/widgets/  # One file per widget type (BacktestWidget, HMMRegimeWidget, …)
+│       ├── index.css            # Global styles + Tailwind directives
+│       ├── components/
+│       │   ├── widgets/         # One file per widget type (BacktestWidget, HMMRegimeWidget, …)
+│       │   ├── layout/          # Topbar, Statusbar
+│       │   ├── panels/          # Shared panel chrome
+│       │   ├── scan/            # ScanProgressOverlay
+│       │   ├── ranking/         # RankingsTable, TickerDrawer, PriceChart
+│       │   └── tabs/            # TabBar, TabCanvas, WidgetFrame, WidgetPicker
+│       ├── hooks/               # Custom React Query hooks — one per data concern
+│       │   ├── useQueries.ts        # useRegime, useMacro, useSectors, useRankings, …
+│       │   ├── useScanStream.ts     # SSE scan progress hook
+│       │   ├── useActiveTab.ts      # Active tab selector
+│       │   ├── useStockHistory.ts   # OHLCV price history
+│       │   ├── useMarketOverview.ts # Market overview data
+│       │   ├── useTickerInfo.ts     # Price/volume/market-cap
+│       │   ├── useTickerProfile.ts  # Company fundamentals
+│       │   └── useWatchlistData.ts  # Watchlist prices
 │       ├── store/
 │       │   ├── useTabStore.ts   # Zustand — tabs, widgets, layout
 │       │   └── useAppStore.ts
-│       ├── lib/api.ts           # All fetch calls (single API client)
-│       └── types/api.ts         # TypeScript interfaces for all API responses
+│       ├── lib/
+│       │   ├── api.ts           # All fetch calls (single API client)
+│       │   ├── format.ts        # Number / date formatting helpers
+│       │   └── calculateHurst.ts # Client-side Hurst exponent (used by HurstWidget)
+│       └── types/
+│           ├── api.ts           # TypeScript interfaces for all API responses
+│           └── tab.ts           # Tab, WidgetConfig, WidgetType union
 ├── src/
 │   ├── agents/
 │   │   ├── market_risk.py       # Stage 0 — 3-layer market fragility / position scale
@@ -78,24 +99,37 @@ alphas/
 │   │   ├── sector_screener.py   # Stage 2 — sector rotation & ranking
 │   │   ├── calculator.py        # Stage 3 — fundamentals (ROIC, WACC, Z-score, etc.)
 │   │   ├── technical.py         # Stage 4 — strategy selection, entry/TP/SL
-│   │   └── risk_manager.py      # Stage 5 — Kelly sizing, CVaR, correlation checks
+│   │   ├── risk_manager.py      # Stage 5 — Kelly sizing, CVaR, correlation checks
+│   │   ├── fundamental_agent.py # LangGraph node wrapping calculator.py for graph pipeline
+│   │   ├── news_pipeline.py     # News fetch + article enrichment
+│   │   ├── news_sentiment.py    # Sentiment scoring for news
+│   │   └── ai_analyst/          # 15+ LangGraph analyst agents (see note below)
 │   ├── backtesting/
 │   │   ├── engine.py            # Normal walk-forward engine → BacktestResult
 │   │   ├── mc_engine.py         # MC integrated engine → MCEngineResult
 │   │   ├── metrics.py           # compute_metrics(equity, trade_log) → dict
 │   │   ├── data_loader.py       # load_prices(tickers, period_years, extra) → DataFrame
 │   │   ├── interfaces.py        # TradingStrategy + PortfolioOptimizer ABCs
+│   │   ├── universes.py         # Universe helpers used by backtesting module
+│   │   ├── strategies/          # Older stub strategies (5 files) — prefer src/strategies/
 │   │   └── optimizers/          # 5 optimizers (see below)
-│   ├── strategies/              # 7 strategies + STRATEGY_MAP
+│   ├── strategies/              # 18 strategies + STRATEGY_MAP (canonical location)
+│   │   └── _ohlcv.py            # Shared OHLCV loader + Wilder ATR helper used by strategies
 │   ├── universes/               # 5 universes + UNIVERSE_MAP
+│   ├── data/
+│   │   └── providers.py         # yfinance data access layer
 │   ├── hmm_regime/              # 4-state HMM regime detection
-│   └── cli/                     # cli4.py (single ticker), cli_ranking.py (batch)
+│   └── main.py                  # LangGraph hedge-fund orchestration entry (partially integrated)
 ├── pyproject.toml               # Poetry config, black line-length=420
 └── cloudbuild*.yaml             # Cloud Build — root / backend / frontend
 ```
 
 Backend adds project root to `sys.path` via `_PROJECT_ROOT = Path(__file__).resolve().parents[2]`.
 `from src.xxx import yyy` always resolves correctly when the server runs from `app/backend/`.
+
+### `src/agents/ai_analyst/` — LangGraph analyst subsystem
+
+Contains 15+ LLM-backed analyst agents modelling named investors (Warren Buffett, Ben Graham, Charlie Munger, Bill Ackman, Cathie Wood, Michael Burry, Peter Lynch, Phil Fisher, Stanley Druckenmiller, Mohnish Pabrai, Rakesh Jhunjhunwala, Aswath Damodaran) plus portfolio manager, risk manager, sentiment, technicals, valuation, growth, and Gemini analyst. These use LangChain + LangGraph and reference `src.graph.*` and `src.tools.*` paths that are not currently present in the repo. Treat this subsystem as partially integrated / not wired into the FastAPI backend.
 
 ---
 
@@ -122,6 +156,7 @@ Each stage builds on the previous. Stages 0–2 are market-wide; Stages 3–4 ru
 | GET | `/api/universes` | — | List universe keys + display names |
 | GET | `/api/regime` | 15 min | Stage 0: market fragility |
 | GET | `/api/macro` | 30 min | Stage 1: global macro signals |
+| GET | `/api/macro/correlation-matrix` | — | Cross-asset correlation matrix |
 | GET | `/api/sectors/{universe}` | 30 min | Stage 2: sector screener |
 | POST | `/api/scan/start?universe=` | — | Launch background full pipeline scan |
 | GET | `/api/scan/status/{job_id}` | — | Poll scan progress |
@@ -129,19 +164,37 @@ Each stage builds on the previous. Stages 0–2 are market-wide; Stages 3–4 ru
 | GET | `/api/rankings/{universe}` | 1 hr | Cached ranking results |
 | GET | `/api/price/{ticker}` | 1 hr | OHLCV bars |
 | GET | `/api/market-overview` | 5 min | Instrument prices + sparklines |
+| GET | `/api/market/entropy` | — | Shannon entropy of market returns |
 | GET | `/api/watchlist?tickers=` | 5 min | Quick price/change for watchlist |
 | GET | `/api/ticker/profile/{ticker}` | 1 hr | Company fundamentals |
 | GET | `/api/ticker/info/{ticker}` | 5 min | Price, volume, market cap |
+| GET | `/api/ticker/fundamentals/{ticker}` | — | Full fundamental metrics breakdown |
 | GET | `/api/backtest/infer-benchmark` | — | Auto-detect benchmark from ticker suffix |
 | POST | `/api/backtest/run` | — | Normal walk-forward backtest |
 | POST | `/api/backtest/run-mc` | — | MC integrated walk-forward backtest |
 | GET | `/api/hmm-regime` | — | HMM regime series + stats |
+| GET | `/api/hurst` | — | Hurst exponent (server-side) |
+| GET | `/api/analysis/transfer-entropy` | — | Transfer entropy between assets |
+| GET | `/api/analysis/sector-te-matrix` | — | Sector-level transfer entropy matrix |
+| GET | `/api/news` | — | News feed for ticker |
+| GET | `/api/news/headlines` | — | Market news headlines |
+| GET | `/api/cache/stats` | — | Cache hit/miss statistics |
 | GET | `/api/health` | — | Health check |
 | DELETE | `/api/cache` | — | Invalidate all caches |
+| GET | `/api/debug/financials/{ticker}` | — | Raw financial data (debug) |
+
+**Known issue:** `/api/hmm-regime` is registered twice in main.py (lines ~1388 and ~1747). FastAPI uses the first registration; the second is dead code.
 
 ---
 
 ## Strategy registry (`src/strategies/STRATEGY_MAP`)
+
+18 strategies total. All inherit `TradingStrategy` ABC from `src/backtesting/interfaces.py`.
+`generate_signals(prices: DataFrame, **kwargs) → DataFrame` — same shape as prices, values in {+1, 0, -1, NaN}.
+
+**Shared helper:** `src/strategies/_ohlcv.py` — `load_ohlcv(ticker, start, end)` and `wilder_atr(high, low, close, period)`. Used internally by most strategies; do not call yfinance directly in strategy files.
+
+**Original strategies:**
 
 | Key | Description |
 |-----|-------------|
@@ -152,9 +205,22 @@ Each stage builds on the previous. Stages 0–2 are market-wide; Stages 3–4 ru
 | `RSIStrategy` | Long when RSI(14) < 30 |
 | `VolatilityBreakoutStrategy` | ATR breakout, supports short |
 | `DRSIStrategy` | Dual RSI (stock vs benchmark), needs `benchmark_prices=` kwarg |
+| `VADERStrategy` | Sentiment-driven signals |
 
-All inherit `TradingStrategy` ABC.
-`generate_signals(prices: DataFrame, **kwargs) → DataFrame` — same shape as prices, values in {+1, 0, -1, NaN}.
+**PineScript-derived strategies:**
+
+| Key | Description |
+|-----|-------------|
+| `PivotPointSupertrendStrategy` | Pivot-point supertrend |
+| `LaguerreRSIStrategy` | Laguerre RSI oscillator |
+| `HurstChoppinessStrategy` | Hurst exponent + choppiness index regime filter |
+| `MansfieldMinerviniStrategy` | Mansfield RS + Minervini trend template |
+| `WVFConnorsRSIStrategy` | Williams VIX Fix + Connors RSI |
+| `ChandelierExitStrategy` | Chandelier exit trailing stop |
+| `BankerFundFlowStrategy` | Banker fund-flow volume analysis |
+| `CPRCamarillaStrategy` | Central Pivot Range + Camarilla levels |
+| `PositionCostDistributionStrategy` | Position cost distribution |
+| `SETSwingDashboardStrategy` | SET-market swing composite |
 
 ---
 
@@ -215,7 +281,24 @@ Signals generated upfront on full history; stop-loss checked before optimizer we
 
 ---
 
-## BacktestWidget.tsx — UI flow
+## Frontend architecture
+
+### Tech stack
+
+React 18 + TypeScript, Vite 7, Tailwind CSS 3, Zustand, TanStack Query v5, react-grid-layout.
+
+### Widget system
+
+Each widget is a self-contained component in `components/widgets/`. The active ticker for the current tab flows from `useTabStore` → widget props. All server data is fetched inside the widget via hooks — widgets do not call `lib/api.ts` directly.
+
+**Widget types** (`types/tab.ts`):
+`historical-price` · `market-overview` · `watchlist` · `price-target` · `ticker-profile` · `ticker-info` · `regime` · `macro` · `sectors` · `news` · `rankings` · `backtest` · `hmm-regime` · `shannon-entropy` · `correlation-matrix` · `transfer-entropy` · `fundamental` · `hurst-exponent`
+
+Default preset tabs: Overview · Quote · Ranking · Backtest (2× side-by-side).
+
+Charts: `recharts` for equity curves and sparklines; `lightweight-charts` (TradingView library) for OHLCV candlestick charts in `HistoricalPriceWidget`. The `HurstWidget` computes its exponent client-side via `lib/calculateHurst.ts` without an API call.
+
+### BacktestWidget.tsx — UI flow
 
 Two engine mode tabs:
 1. **Normal** — Universe (multi-asset + optimizer) or Single-Stock sub-modes
@@ -223,14 +306,9 @@ Two engine mode tabs:
 
 Reused sub-components across both modes: `KpiCard`, `LabeledSelect`, `LabeledNumber`, `ChartTooltip`, `PositionsTooltip`, `BuyDot`, `SellDot`, `StopDot`, `buildChartData()`, format helpers.
 
----
-
-## Frontend state (Zustand — `useTabStore.ts`)
+### Frontend state (Zustand — `useTabStore.ts`)
 
 Each **Tab**: id, name, activeTicker, layout (react-grid-layout), widgets[].
-Widget types: `historical-price | market-overview | watchlist | price-target | ticker-profile | ticker-info | regime | macro | sectors | news | rankings | backtest | hmm-regime`
-
-Default preset tabs: Overview · Quote · Ranking · Backtest (2× side-by-side).
 
 ---
 
@@ -268,3 +346,4 @@ Features: returns, realized vol, log-volume ratio.
 5. **Normal mode unchanged:** Feature work must not touch existing Normal backtest code paths.
 6. **Strategy interface:** `generate_signals()` returns DataFrame same shape as prices, values in {+1, 0, -1, NaN}. Never change this contract.
 7. **BacktestResult compatibility:** MC engine must produce all fields consumed by the serialiser in `/api/backtest/run` (equity_curve, benchmark_curve, trade_log with asset/entry_date/exit_date/return_pct/pnl/equity_at_exit/stop_triggered, fold_returns, metrics, weights_history).
+8. **Canonical strategy location:** All strategies live in `src/strategies/`. `src/backtesting/strategies/` is an older stub directory — do not add new strategies there.

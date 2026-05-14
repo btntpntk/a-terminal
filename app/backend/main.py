@@ -70,6 +70,19 @@ cache: TTLCache = TTLCache()
 # In-memory scan job store: {job_id: dict}
 _scan_jobs: dict[str, dict] = {}
 
+# In-memory deep-dive job store: {job_id: dict}
+_deep_dive_jobs: dict[str, dict] = {}
+
+# Strategies run in deep-dive mode (DRSIStrategy excluded — needs benchmark_prices kwarg)
+_DEEP_DIVE_STRATEGIES = [
+    "MomentumStrategy", "MeanReversionStrategy", "MovingAverageCrossStrategy",
+    "EMACrossStrategy", "RSIStrategy", "VolatilityBreakoutStrategy", "VADERStrategy",
+    "PivotPointSupertrendStrategy", "LaguerreRSIStrategy", "HurstChoppinessStrategy",
+    "MansfieldMinerviniStrategy", "WVFConnorsRSIStrategy", "ChandelierExitStrategy",
+    "BankerFundFlowStrategy", "CPRCamarillaStrategy", "PositionCostDistributionStrategy",
+    "SETSwingDashboardStrategy",
+]
+
 
 def _make_job(universe: str, total: int = 0) -> dict:
     return {
@@ -101,6 +114,7 @@ def _job_progress_pct(job: dict) -> float:
 async def lifespan(app: FastAPI):
     yield
     _scan_jobs.clear()
+    _deep_dive_jobs.clear()
     cache.clear()
 
 
@@ -1738,6 +1752,170 @@ async def debug_financials(ticker: str):
 
     result = await asyncio.to_thread(_fetch)
     return _clean_floats(result)
+
+
+# ─────────────────────────────────────────────────────────────
+# BACKGROUND TASK — DEEP DIVE (all strategies, single ticker)
+# ─────────────────────────────────────────────────────────────
+
+async def _run_deep_dive(job_id: str, ticker: str, period_years: int) -> None:
+    from src.strategies import STRATEGY_MAP
+    from src.backtesting.optimizers import OPTIMIZER_MAP
+    from src.backtesting.data_loader import load_prices
+    from src.backtesting.engine import run_backtest
+
+    job = _deep_dive_jobs[job_id]
+    job["status"] = "running"
+    bm_ticker = _infer_benchmark(ticker)
+
+    try:
+        prices = await asyncio.to_thread(
+            load_prices, [ticker], period_years + 2, [bm_ticker],
+        )
+        if ticker not in prices.columns:
+            raise ValueError(f"No price data found for '{ticker}'.")
+    except Exception as exc:
+        job["status"] = "failed"
+        job["error"]  = str(exc)
+        return
+
+    bm_prices    = prices[bm_ticker] if bm_ticker in prices.columns else prices[ticker]
+    asset_prices = prices[[ticker]].dropna(how="all")
+    optimizer    = OPTIMIZER_MAP["EqualWeightOptimizer"]()
+
+    for strategy_key in _DEEP_DIVE_STRATEGIES:
+        job["current_strategy"] = strategy_key
+        try:
+            strategy = STRATEGY_MAP[strategy_key]()
+
+            def _bt(s=strategy):
+                return run_backtest(
+                    prices            = asset_prices,
+                    benchmark_prices  = bm_prices,
+                    strategy          = s,
+                    optimizer         = optimizer,
+                    initial_capital   = 1_000_000.0,
+                    max_stop_loss_pct = 0.05,
+                )
+
+            bt = await asyncio.to_thread(_bt)
+            eq  = {d.strftime("%Y-%m-%d"): round(v, 2) for d, v in bt.equity_curve.items()    if not math.isnan(v)}
+            bmc = {d.strftime("%Y-%m-%d"): round(v, 2) for d, v in bt.benchmark_curve.items() if not math.isnan(v)}
+            markers: list[dict] = []
+            if not bt.trade_log.empty:
+                for _, row in bt.trade_log.iterrows():
+                    entry = row.get("entry_date")
+                    exit_ = row.get("exit_date")
+                    if entry is not None and str(entry) != "NaT":
+                        markers.append({"date": str(entry)[:10], "type": "buy"})
+                    if exit_ is not None and str(exit_) != "NaT":
+                        stopped = bool(row.get("stop_triggered", False))
+                        markers.append({"date": str(exit_)[:10], "type": "stop" if stopped else "sell"})
+            job["results"].append(_clean_floats({
+                "strategy":        strategy_key,
+                "metrics":         bt.metrics,
+                "equity_curve":    eq,
+                "benchmark_curve": bmc,
+                "trade_markers":   markers,
+            }))
+        except Exception as exc:
+            job["results"].append({
+                "strategy":        strategy_key,
+                "error":           str(exc),
+                "metrics":         None,
+                "equity_curve":    {},
+                "benchmark_curve": {},
+                "trade_markers":   [],
+            })
+
+        job["completed"] += 1
+
+    job["current_strategy"] = None
+    job["status"]           = "completed"
+
+
+# ─────────────────────────────────────────────────────────────
+# ROUTES — DEEP DIVE
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/deep-dive/start", tags=["Deep Dive"])
+async def start_deep_dive(
+    ticker:       str = Query(..., description="Asset ticker, e.g. AAPL or PTT.BK"),
+    period_years: int = Query(5,   ge=1, le=15, description="History length in years"),
+):
+    """
+    Launch a background job that runs all 17 strategies (single-ticker Normal mode)
+    against a given ticker and streams results via GET /api/deep-dive/stream/{job_id}.
+    """
+    ticker = ticker.upper().strip()
+    if not ticker:
+        raise HTTPException(status_code=400, detail="ticker is required.")
+
+    job_id = str(uuid4())
+    _deep_dive_jobs[job_id] = {
+        "job_id":           job_id,
+        "ticker":           ticker,
+        "period_years":     period_years,
+        "status":           "pending",
+        "current_strategy": None,
+        "completed":        0,
+        "total":            len(_DEEP_DIVE_STRATEGIES),
+        "results":          [],
+        "error":            None,
+    }
+    asyncio.create_task(_run_deep_dive(job_id, ticker, period_years))
+    return {"job_id": job_id, "total": len(_DEEP_DIVE_STRATEGIES)}
+
+
+@app.get("/api/deep-dive/stream/{job_id}", tags=["Deep Dive"])
+async def deep_dive_stream(job_id: str):
+    """
+    SSE stream for a deep-dive job.  Two event shapes:
+
+      {"type":"result",   "strategy":..., "metrics":..., "equity_curve":..., "benchmark_curve":..., "completed":N, "total":17}
+      {"type":"progress", "completed":N,  "total":17, "current_strategy":..., "status":...}
+    """
+    if job_id not in _deep_dive_jobs:
+        raise HTTPException(status_code=404, detail="Deep-dive job not found.")
+
+    async def _generate() -> AsyncGenerator[str, None]:
+        sent_idx = 0
+        while True:
+            job  = _deep_dive_jobs.get(job_id)
+            if job is None:
+                break
+
+            results = job["results"]
+
+            # Flush any new strategy results
+            while sent_idx < len(results):
+                r = results[sent_idx]
+                payload = {
+                    "type":            "result",
+                    "completed":       sent_idx + 1,
+                    "total":           job["total"],
+                    **r,
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+                sent_idx += 1
+
+            # Always emit a progress heartbeat
+            yield f"data: {json.dumps({'type': 'progress', 'completed': job['completed'], 'total': job['total'], 'current_strategy': job['current_strategy'], 'status': job['status']})}\n\n"
+
+            if job["status"] in ("completed", "failed"):
+                break
+
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(
+        _generate(),
+        media_type = "text/event-stream",
+        headers    = {
+            "Cache-Control":               "no-cache",
+            "X-Accel-Buffering":           "no",
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
 
 
 # ─────────────────────────────────────────────────────────────

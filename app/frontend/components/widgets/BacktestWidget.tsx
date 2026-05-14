@@ -7,6 +7,7 @@ import { api } from '../../lib/api';
 import type {
   BacktestRequest, BacktestResponse, BacktestMetrics,
   MCBacktestRequest, MCBacktestResponse, MCTradeDetail, MCAggregateStats,
+  TradeMarker,
 } from '../../types/api';
 
 // ── Local alias types ─────────────────────────────────────────────────────
@@ -147,7 +148,7 @@ function buildChartData(
   equity: Record<string, number>,
   benchmark: Record<string, number>,
   buyhold?: Record<string, number> | null,
-  markers?: Array<{ date: string; type: 'buy' | 'sell' }>,
+  markers?: TradeMarker[],
 ): Array<{ date: string; portfolio: number; benchmark: number; buyhold?: number; buySignal?: number; sellSignal?: number; stopSignal?: number }> {
   const pctEquity    = toReturnPct(equity);
   const pctBenchmark = toReturnPct(benchmark);

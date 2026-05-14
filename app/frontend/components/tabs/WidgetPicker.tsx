@@ -33,6 +33,7 @@ const WIDGET_OPTIONS: WidgetOption[] = [
   { group: 'RISK',       type: 'correlation-matrix',  label: 'Macro Correlation Matrix', desc: 'Rolling 30d correlation: US10Y, DXY, Brent, USD/THB vs SET50' },
   { group: 'RISK',       type: 'transfer-entropy',    label: 'Transfer Entropy',         desc: 'Directed info flow: SEC event → price leakage + SET50 sector lead-lag matrix' },
   { group: 'ANALYSIS',  type: 'hurst-exponent',      label: 'Hurst Exponent',           desc: 'Rolling R/S regime detector — sideways / random walk / trending' },
+  { group: 'ANALYSIS',  type: 'ticker-deep-dive',    label: 'Ticker Deep Dive',         desc: 'Run all 17 strategies on any ticker — sortable metrics table with equity curves' },
 ];
 
 interface Props {

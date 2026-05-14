@@ -183,6 +183,12 @@ export const api = {
     return apiFetch<import('../types/api').TransferEntropyResponse>(`/api/analysis/transfer-entropy?${p}`);
   },
 
+  startDeepDive: (ticker: string, periodYears: number) =>
+    apiFetch<{ job_id: string; total: number }>(
+      `/api/deep-dive/start?ticker=${encodeURIComponent(ticker)}&period_years=${periodYears}`,
+      { method: 'POST' },
+    ),
+
   sectorTeMatrix: (params?: { lag?: number; bins?: number; window?: number; refresh?: boolean }) => {
     const p = new URLSearchParams();
     if (params?.lag    != null) p.set('lag',    String(params.lag));

@@ -578,7 +578,7 @@ export function HMMRegimeWidget({ tabId: _ }: Props) {
                 tickFormatter={d => d.slice(0, 7)} interval="preserveStartEnd" />
               <YAxis tick={{ fontSize: 9 }} domain={[0, 100]} tickFormatter={v => `${v}%`} />
               <Tooltip
-                formatter={(v: number, name: string) => [`${v.toFixed(1)}%`, name.replace('p_', '')]}
+                formatter={(v, name) => [`${(v as number).toFixed(1)}%`, (name as string).replace('p_', '')]}
                 contentStyle={{ background: '#0f172a', border: '1px solid #334155', fontSize: 11 }}
               />
               <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
