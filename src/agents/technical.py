@@ -429,11 +429,12 @@ def optimise_strategy(df: pd.DataFrame,
 
 def run_technical_analysis(ticker: str,
                             composite_risk: float = 50,
-                            force_strategy: Optional[str] = None) -> TechnicalSignal:
+                            force_strategy: Optional[str] = None,
+                            df: Optional[pd.DataFrame] = None) -> TechnicalSignal:
     """
     Full technical analysis pipeline for a single stock.
 
-    1. Fetch OHLCV price data
+    1. Fetch OHLCV price data (or use the pre-fetched `df` when provided)
     2. Detect price regime (TRENDING / RANGING / BREAKOUT)
     3. Optimise strategy selection via rolling Sharpe
     4. Run the winning strategy to produce entry, TP, SL, R:R
@@ -445,6 +446,9 @@ def run_technical_analysis(ticker: str,
         Stage 1 composite risk score. Raises bar for mean-reversion entries.
     force_strategy : str, optional
         Override auto-selection. One of 'MOMENTUM', 'MEAN_REVERSION', 'BREAKOUT'.
+    df : pd.DataFrame, optional
+        Pre-fetched 1Y daily OHLCV. Pass this from the scan orchestrator so
+        the same history isn't downloaded twice per ticker.
 
     Returns
     -------
@@ -452,7 +456,8 @@ def run_technical_analysis(ticker: str,
     """
     # ── 1. Fetch data ─────────────────────────────────────────
     try:
-        df = yf.Ticker(ticker).history(period="1y", interval="1d")
+        if df is None:
+            df = yf.Ticker(ticker).history(period="1y", interval="1d")
         df = df.dropna(subset=["Close", "High", "Low"])
         if len(df) < 60:
             raise ValueError(f"Insufficient price history for {ticker}: {len(df)} bars")

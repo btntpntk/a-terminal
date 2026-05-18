@@ -45,6 +45,7 @@ from pipeline import (
     fetch_macro,
     fetch_regime,
     fetch_sectors,
+    fetch_spy_close_1y,
     get_universe_info,
 )
 from schemas import (
@@ -238,6 +239,15 @@ async def _run_scan(job_id: str, universe_key: str) -> None:
             for s in sector_data["ranked_sectors"]
         }
 
+        # Fetch SPY 1Y once and reuse it across every ticker for the
+        # `beta_vs_spy` enrichment. Previously this round-trip happened
+        # inside `_enrich_info` for each ticker — 100 redundant HTTPs for a
+        # SET100 scan. Failure is non-fatal: beta_vs_spy is non-critical.
+        try:
+            spy_history = await asyncio.to_thread(fetch_spy_close_1y)
+        except Exception:
+            spy_history = None
+
         # ── Per-ticker scan (Stages 3+4) ──────────────────────
         sem = asyncio.Semaphore(8)
 
@@ -246,6 +256,7 @@ async def _run_scan(job_id: str, universe_key: str) -> None:
                 result = await asyncio.to_thread(
                     analyze_ticker,
                     ticker, composite_risk, macro, sector_scores, cfg["universe"],
+                    spy_history,
                 )
                 job["completed"] += 1
                 job["progress_pct"] = _job_progress_pct(job)
@@ -1585,10 +1596,19 @@ async def get_news_headlines():
 # ─────────────────────────────────────────────────────────────
 
 @app.delete("/api/cache", tags=["Admin"])
-async def clear_cache():
-    """Invalidate all caches. Forces fresh data on next request."""
+async def clear_cache(
+    include_ticker_cache: bool = Query(
+        False,
+        description="Also wipe the disk-backed per-ticker yfinance cache (.cache/ticker/).",
+    ),
+):
+    """Invalidate caches. Forces fresh data on next request."""
     cache.clear()
-    return {"message": "Cache cleared.", "stats": cache.stats()}
+    payload = {"message": "Cache cleared.", "stats": cache.stats()}
+    if include_ticker_cache:
+        from src.data.yfinance_cache import clear_all as clear_ticker_disk_cache
+        payload["ticker_cache"] = clear_ticker_disk_cache()
+    return payload
 
 
 # ─────────────────────────────────────────────────────────────

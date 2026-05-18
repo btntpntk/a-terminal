@@ -1,9 +1,15 @@
+from __future__ import annotations
+
 import yfinance as yf
 import pandas as pd
 import numpy as np
 
 
-def _enrich_info(info: dict, history: pd.DataFrame) -> dict:
+def _enrich_info(
+    info: dict,
+    history: pd.DataFrame,
+    spy_history: pd.Series | pd.DataFrame | None = None,
+) -> dict:
     """
     Fill gaps in ticker_info that yfinance commonly omits for non-US tickers
     (.BK, .HK, .SI, etc.) so downstream WACC / beta calculations always have
@@ -12,6 +18,13 @@ def _enrich_info(info: dict, history: pd.DataFrame) -> dict:
     Fields injected if missing or zero:
       marketCap  — computed from sharesOutstanding × current price
       beta       — computed from 1Y daily returns vs SPY (global risk proxy)
+
+    Parameters
+    ----------
+    spy_history : optional
+        Pre-fetched SPY Close series (or DataFrame). Pass this when running
+        a batch of tickers so the SPY fetch happens once instead of once per
+        ticker. When None, falls back to fetching from yfinance.
     """
     # ── Market cap ────────────────────────────────────────────────────────────
     if not info.get('marketCap') or float(info.get('marketCap', 0)) == 0:
@@ -31,9 +44,18 @@ def _enrich_info(info: dict, history: pd.DataFrame) -> dict:
     # preserving the original local 'beta' for SET-relative risk display.
     try:
         if not history.empty and len(history) >= 60:
-            spy_hist = yf.Ticker("SPY").history(period="1y")["Close"]
+            if spy_history is None:
+                # Route the fallback fetch through the disk cache so callers
+                # that don't pre-fetch (e.g. the debug endpoint) still avoid
+                # the network on repeat hits.
+                from src.data.yfinance_cache import get_history as _get_history
+                spy_close = _get_history("SPY", period="1y")["Close"]
+            elif isinstance(spy_history, pd.DataFrame):
+                spy_close = spy_history["Close"]
+            else:
+                spy_close = spy_history
             asset_ret = history["Close"].pct_change().dropna()
-            spy_ret   = spy_hist.pct_change().dropna()
+            spy_ret   = spy_close.pct_change().dropna()
             combined  = pd.concat([asset_ret, spy_ret], axis=1).dropna()
             if len(combined) >= 30:
                 cov_mat = np.cov(combined.iloc[:, 0], combined.iloc[:, 1])
@@ -43,6 +65,19 @@ def _enrich_info(info: dict, history: pd.DataFrame) -> dict:
         pass   # non-critical enrichment — silently skip
 
     return info
+
+
+def fetch_spy_close_1y() -> pd.Series:
+    """
+    Fetch 1Y SPY Close series. Intended to be called once per scan and
+    passed into `_enrich_info` for every ticker so the SPY round-trip is
+    not repeated N times.
+
+    Routes through the disk cache so consecutive scans within the price
+    TTL (default 4h) skip the network entirely.
+    """
+    from src.data.yfinance_cache import get_history
+    return get_history("SPY", period="1y")["Close"]
 
 
 async def fetch_all_data(ticker: str) -> dict:

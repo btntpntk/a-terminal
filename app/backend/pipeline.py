@@ -7,10 +7,18 @@ No Rich / CLI dependencies — pure data in, pure dict out.
 """
 
 from __future__ import annotations
+import pandas as pd
 import yfinance as yf
 import numpy as np
 
-from src.data.providers import _enrich_info
+from src.data.providers import _enrich_info, fetch_spy_close_1y  # noqa: F401
+from src.data.yfinance_cache import (
+    get_balance_sheet,
+    get_cashflow,
+    get_financials,
+    get_history,
+    get_info,
+)
 from src.agents.market_risk import (
     calculate_spx_200dma_buffer,
     calculate_yield_curve_spread,
@@ -157,29 +165,43 @@ def fetch_sectors(universe_key: str, macro_results: dict) -> dict:
 # ─────────────────────────────────────────────────────────────
 
 def analyze_ticker(
-    ticker:        str,
+    ticker:         str,
     composite_risk: float,
-    macro_results: dict,
-    sector_scores: dict,
-    universe:      dict,
+    macro_results:  dict,
+    sector_scores:  dict,
+    universe:       dict,
+    spy_history:    pd.Series | pd.DataFrame | None = None,
 ) -> dict:
     """
     Runs Stage 3 (fundamentals) + Stage 4 (technical) for one ticker.
     Pure synchronous — safe for asyncio.to_thread.
     Returns a result row dict or {"ok": False, "ticker": ..., "error": ...}.
+
+    Parameters
+    ----------
+    spy_history : optional
+        Pre-fetched SPY 1Y Close series. Passing this avoids one redundant
+        HTTP fetch per ticker during a batch scan.
     """
     try:
-        stock   = yf.Ticker(ticker)
-        history = stock.history(period="1y")
+        # All five yfinance accesses below go through the disk cache
+        # (.cache/ticker/<ticker>/). Cold ticker → fetches from Yahoo and
+        # writes to disk. Warm ticker (within TTL) → reads parquet/JSON
+        # from disk, no network. TTLs are 4h for prices and 24h for
+        # fundamentals — see src/data/yfinance_cache.py.
+        history = get_history(ticker, period="1y")
         if history.empty:
             return {"ok": False, "ticker": ticker, "error": "No price history"}
 
         returns = history["Close"].pct_change().dropna()
         price   = float(history["Close"].iloc[-1])
-        fin, bs, cf = stock.financials, stock.balance_sheet, stock.cashflow
+        fin     = get_financials(ticker)
+        bs      = get_balance_sheet(ticker)
+        cf      = get_cashflow(ticker)
         # Enrich info so marketCap is available for non-US tickers (.BK etc.)
-        # This is the same enrichment applied in providers.py for the CLI path.
-        info = _enrich_info(dict(stock.info), history)
+        # SPY history is threaded in from the scan orchestrator so it's only
+        # fetched once per scan rather than once per ticker.
+        info = _enrich_info(get_info(ticker), history, spy_history=spy_history)
 
         # ── Stage 3 ───────────────────────────────────────────
         sector_name  = get_sector_for_ticker(ticker, universe=universe)
@@ -205,8 +227,13 @@ def analyze_ticker(
         gate3 = alpha >= 50 and z > 1.81
 
         # ── Stage 4 ───────────────────────────────────────────
+        # Reuse the 1Y history we just fetched — avoids a duplicate
+        # `yf.Ticker(...).history(period="1y")` call inside the technical
+        # pipeline.
         try:
-            sig   = run_technical_analysis(ticker, composite_risk=composite_risk)
+            sig   = run_technical_analysis(
+                ticker, composite_risk=composite_risk, df=history,
+            )
             gate4 = sig.rr_ratio >= 1.5 and sig.signal_strength >= 40
         except Exception:
             sig   = None

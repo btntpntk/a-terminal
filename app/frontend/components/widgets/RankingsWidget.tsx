@@ -1,10 +1,17 @@
-import { useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRankings, useUniverses } from '../../hooks/useQueries';
 import { useAppStore } from '../../store/useAppStore';
 import { useTabStore } from '../../store/useTabStore';
 import { fmt, scoreColor, riskColor } from '../../lib/format';
 import { api } from '../../lib/api';
+import {
+  recomputeRow,
+  alphaWeightsEqualDefault,
+  rankWeightsEqualDefault,
+  type RecomputedRow,
+} from '../../lib/alphaScore';
+import { WeightsConfig } from '../ranking/WeightsConfig';
 import type { TickerRow } from '../../types/api';
 
 interface Props { tabId: string }
@@ -14,6 +21,20 @@ const COL_TOTAL = COL_PX.reduce((a, b) => a + b, 0);
 const COL_PCT   = COL_PX.map(w => `${((w / COL_TOTAL) * 100).toFixed(3)}%`);
 const COL_HEADS = ['#','TICKER','SECTOR','SCORE','ALPHA','MOAT','Z','SLOAN','FCF','SORT','β','STRAT','SS','R:R','ENTRY','TP','SL','GATE','VERDICT'];
 const LEFT_ALIGN = new Set(['#','TICKER','SECTOR','STRAT']);
+
+/** Grouped header bands — "merged-cell" labels spanning a range of columns. */
+const COL_GROUPS: Array<{ label: string; start: number; end: number; tone?: 'fund' | 'tech' }> = [
+  // Inclusive indices into COL_HEADS / COL_PX.
+  { label: '',            start: 0,  end: 3  }, // #, TICKER, SECTOR, SCORE
+  { label: 'FUNDAMENTAL', start: 4,  end: 8,  tone: 'fund' }, // matches FUND verdict pill
+  { label: 'TECHNICAL',   start: 9,  end: 16, tone: 'tech' }, // matches TECH verdict pill
+  { label: '',            start: 17, end: 18 }, // GATE, VERDICT
+];
+
+function groupWidthPct(start: number, end: number): string {
+  const px = COL_PX.slice(start, end + 1).reduce((a, b) => a + b, 0);
+  return `${((px / COL_TOTAL) * 100).toFixed(3)}%`;
+}
 
 const VERDICT_LABELS: Record<string, string> = { BUY:'BUY', FUND_ONLY:'FUND', TECH_ONLY:'TECH', FAIL:'FAIL' };
 
@@ -45,6 +66,7 @@ export function RankingsWidget({ tabId }: Props) {
     selectedUniverse, setUniverse,
     verdictFilter, sectorFilter, tickerSearch,
     setFilters, setScanJob,
+    alphaWeights, rankWeights,
   } = useAppStore();
   const setActiveTicker = useTabStore(s => s.setActiveTicker);
 
@@ -52,6 +74,7 @@ export function RankingsWidget({ tabId }: Props) {
   const { data, isLoading, error } = useRankings();
   const rankings = useAppStore(s => s.rankings) ?? data;
   const parentRef = useRef<HTMLDivElement>(null);
+  const [weightsOpen, setWeightsOpen] = useState(false);
 
   const handleScan = async () => {
     try {
@@ -62,11 +85,33 @@ export function RankingsWidget({ tabId }: Props) {
     }
   };
 
+  const weightsModified =
+    !alphaWeightsEqualDefault(alphaWeights) || !rankWeightsEqualDefault(rankWeights);
+
+  // Recompute Alpha + Rank Score + verdict + gate3 from the configured weights.
+  // Default weights produce the same numbers as the server, so this is a no-op
+  // when the user hasn't customised anything.
+  const recomputedRows = useMemo<RecomputedRow[]>(() => {
+    if (!rankings) return [];
+    const compositeRisk = rankings.composite_risk;
+    const rows = rankings.rows.map(r => recomputeRow(r, alphaWeights, rankWeights, compositeRisk));
+    // Same ordering as backend: BUYs first, then by rank_score desc.
+    rows.sort((a, b) => {
+      const aBuy = a.gate3 && a.gate4 ? 1 : 0;
+      const bBuy = b.gate3 && b.gate4 ? 1 : 0;
+      if (aBuy !== bBuy) return bBuy - aBuy;
+      return b.rank_score - a.rank_score;
+    });
+    return rows;
+  }, [rankings, alphaWeights, rankWeights]);
+
+  const buyCount = recomputedRows.filter(r => r.gate3 && r.gate4).length;
+
   const allSectors = rankings
     ? Array.from(new Set(rankings.rows.map(r => r.sector))).sort()
     : [];
 
-  const filteredRows: TickerRow[] = (rankings?.rows ?? []).filter(r => {
+  const filteredRows: RecomputedRow[] = recomputedRows.filter(r => {
     if (verdictFilter !== 'ALL' && r.verdict !== verdictFilter) return false;
     if (sectorFilter && r.sector !== sectorFilter) return false;
     if (tickerSearch) {
@@ -136,6 +181,15 @@ export function RankingsWidget({ tabId }: Props) {
 
       <div style={{ flex: 1 }} />
 
+      {/* Weights config */}
+      <button
+        className={`weights-btn${weightsModified ? ' modified' : ''}`}
+        onClick={() => setWeightsOpen(true)}
+        title="Adjust AlphaScore and Rank Score weights"
+      >
+        ⚙ WEIGHTS{weightsModified ? ' •' : ''}
+      </button>
+
       {/* RUN SCAN */}
       <button className="scan-btn" onClick={handleScan}>▶ RUN SCAN</button>
     </div>
@@ -155,6 +209,7 @@ export function RankingsWidget({ tabId }: Props) {
             ▶ RUN SCAN
           </button>
         </div>
+        <WeightsConfig open={weightsOpen} onClose={() => setWeightsOpen(false)} />
       </div>
     );
   }
@@ -164,6 +219,7 @@ export function RankingsWidget({ tabId }: Props) {
       <div className="rw-wrap">
         <Toolbar />
         <div className="widget-loading">Loading rankings…</div>
+        <WeightsConfig open={weightsOpen} onClose={() => setWeightsOpen(false)} />
       </div>
     );
   }
@@ -171,6 +227,19 @@ export function RankingsWidget({ tabId }: Props) {
   return (
     <div className="rw-wrap">
       <Toolbar />
+
+      {/* Grouped header — "merged-cell" bands above the column row */}
+      <div className="rw-group-header">
+        {COL_GROUPS.map((g, idx) => (
+          <div
+            key={`${g.label}-${idx}`}
+            className={`rw-group-cell${g.tone ? ` rw-group-cell--${g.tone}` : ''}`}
+            style={{ width: groupWidthPct(g.start, g.end) }}
+          >
+            {g.label}
+          </div>
+        ))}
+      </div>
 
       {/* Column header */}
       <div className="rw-col-header">
@@ -230,10 +299,17 @@ export function RankingsWidget({ tabId }: Props) {
       {/* Footer */}
       <div className="rw-footer">
         {filteredRows.length} / {rankings!.total_scanned} shown
-        &nbsp;·&nbsp;BUY: <span style={{ color: 'var(--col-buy)' }}>{rankings!.buy_count}</span>
+        &nbsp;·&nbsp;BUY: <span style={{ color: 'var(--col-buy)' }}>{buyCount}</span>
         &nbsp;·&nbsp;FAIL: {rankings!.failed_count}
+        {weightsModified && (
+          <>
+            &nbsp;·&nbsp;
+            <span style={{ color: 'var(--col-amber)' }}>weights customised</span>
+          </>
+        )}
       </div>
 
+      <WeightsConfig open={weightsOpen} onClose={() => setWeightsOpen(false)} />
     </div>
   );
 }

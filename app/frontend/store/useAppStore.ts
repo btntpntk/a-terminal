@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type {
   RegimeResponse,
   MacroResponse,
@@ -7,6 +8,12 @@ import type {
   ScanProgress,
   FilterState,
 } from '../types/api';
+import {
+  DEFAULT_ALPHA_WEIGHTS,
+  DEFAULT_RANK_WEIGHTS,
+  type AlphaWeights,
+  type RankWeights,
+} from '../lib/alphaScore';
 
 interface AppStore extends FilterState {
   selectedUniverse: string;
@@ -31,32 +38,59 @@ interface AppStore extends FilterState {
   setSelectedTicker: (t: string | null) => void;
 
   setFilters: (f: Partial<FilterState>) => void;
+
+  alphaWeights: AlphaWeights;
+  rankWeights: RankWeights;
+  setAlphaWeights: (w: AlphaWeights) => void;
+  setRankWeights: (w: RankWeights) => void;
+  resetWeights: () => void;
 }
 
-export const useAppStore = create<AppStore>((set) => ({
-  selectedUniverse: 'SET100',
-  setUniverse: (key) => set({ selectedUniverse: key, selectedTicker: null }),
+export const useAppStore = create<AppStore>()(
+  persist(
+    (set) => ({
+      selectedUniverse: 'SET100',
+      setUniverse: (key) => set({ selectedUniverse: key, selectedTicker: null }),
 
-  regime: null,
-  macro: null,
-  sectors: null,
-  rankings: null,
-  setRegime: (regime) => set({ regime }),
-  setMacro: (macro) => set({ macro }),
-  setSectors: (sectors) => set({ sectors }),
-  setRankings: (rankings) => set({ rankings }),
+      regime: null,
+      macro: null,
+      sectors: null,
+      rankings: null,
+      setRegime: (regime) => set({ regime }),
+      setMacro: (macro) => set({ macro }),
+      setSectors: (sectors) => set({ sectors }),
+      setRankings: (rankings) => set({ rankings }),
 
-  scanJobId: null,
-  scanStatus: null,
-  setScanJob: (id) => set({ scanJobId: id }),
-  setScanStatus: (s) => set({ scanStatus: s }),
-  clearScan: () => set({ scanJobId: null, scanStatus: null }),
+      scanJobId: null,
+      scanStatus: null,
+      setScanJob: (id) => set({ scanJobId: id }),
+      setScanStatus: (s) => set({ scanStatus: s }),
+      clearScan: () => set({ scanJobId: null, scanStatus: null }),
 
-  selectedTicker: null,
-  setSelectedTicker: (t) => set({ selectedTicker: t }),
+      selectedTicker: null,
+      setSelectedTicker: (t) => set({ selectedTicker: t }),
 
-  verdictFilter: 'ALL',
-  sectorFilter: '',
-  tickerSearch: '',
-  setFilters: (f) => set((s) => ({ ...s, ...f })),
-}));
+      verdictFilter: 'ALL',
+      sectorFilter: '',
+      tickerSearch: '',
+      setFilters: (f) => set((s) => ({ ...s, ...f })),
+
+      alphaWeights: DEFAULT_ALPHA_WEIGHTS,
+      rankWeights: DEFAULT_RANK_WEIGHTS,
+      setAlphaWeights: (alphaWeights) => set({ alphaWeights }),
+      setRankWeights: (rankWeights) => set({ rankWeights }),
+      resetWeights: () => set({
+        alphaWeights: DEFAULT_ALPHA_WEIGHTS,
+        rankWeights: DEFAULT_RANK_WEIGHTS,
+      }),
+    }),
+    {
+      name: 'alphas-app-store',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        alphaWeights: state.alphaWeights,
+        rankWeights: state.rankWeights,
+      }),
+    },
+  ),
+);
