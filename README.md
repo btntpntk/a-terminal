@@ -85,7 +85,7 @@ curl http://localhost:8000/api/rankings/SP500_SAMPLE
 alphas/
 ├── app/
 │   ├── backend/
-│   │   ├── main.py          # All FastAPI routes (~1250 lines)
+│   │   ├── main.py          # All FastAPI routes (~2200 lines)
 │   │   ├── pipeline.py      # Stage adapters (pure functions)
 │   │   ├── schemas.py       # Pydantic v2 response models
 │   │   └── cache.py         # Thread-safe in-memory TTL cache
@@ -94,12 +94,21 @@ alphas/
 │       ├── components/widgets/
 │       │   ├── BacktestWidget.tsx       # Normal + MC backtest UI
 │       │   ├── HMMRegimeWidget.tsx      # HMM regime chart
-│       │   ├── RankingsWidget.tsx       # Screener table
-│       │   └── ...                      # 11 other widgets
+│       │   ├── RankingsWidget.tsx       # Screener table + grouped header
+│       │   └── ...                      # 15 other widgets
+│       ├── components/ranking/
+│       │   ├── RankingsTable.tsx
+│       │   ├── TickerDrawer.tsx
+│       │   ├── PriceChart.tsx
+│       │   └── WeightsConfig.tsx        # ⚙ Configurable score weights modal
 │       ├── store/
-│       │   ├── useTabStore.ts           # Tab/widget layout (Zustand)
-│       │   └── useAppStore.ts
-│       ├── lib/api.ts                   # All fetch calls
+│       │   ├── useTabStore.ts           # Tab/widget layout (Zustand, persisted)
+│       │   └── useAppStore.ts           # Filters + score weights (Zustand, persisted)
+│       ├── lib/
+│       │   ├── api.ts                   # All fetch calls
+│       │   ├── format.ts
+│       │   ├── calculateHurst.ts        # Client-side Hurst exponent
+│       │   └── alphaScore.ts            # Client-side AlphaScore + Rank Score recompute
 │       └── types/api.ts                 # TypeScript interfaces
 ├── src/
 │   ├── agents/
@@ -119,7 +128,12 @@ alphas/
 │   ├── hmm_regime/             # 4-state Gaussian HMM (bull/sideways/bear/crash)
 │   ├── universes/              # 5 universe definitions
 │   └── data/
-│       └── providers.py        # yfinance data access layer
+│       ├── providers.py        # yfinance data access layer
+│       └── yfinance_cache.py   # Disk-backed TTL cache for ticker data
+├── .cache/
+│   ├── prices/                 # Backtesting price cache (parquet)
+│   ├── hmm/                    # HMM fit cache
+│   └── ticker/                 # Per-ticker scan cache (history + fundamentals)
 └── pyproject.toml
 ```
 
@@ -146,7 +160,34 @@ Base URL: `http://localhost:8000`
 | POST | `/api/backtest/run-mc` | — | Monte Carlo integrated backtest |
 | GET | `/api/hmm-regime` | — | HMM regime series + state probabilities |
 | GET | `/api/health` | — | Health check |
-| DELETE | `/api/cache` | — | Invalidate all TTL caches |
+| DELETE | `/api/cache` | — | Invalidate in-memory TTL caches; pass `?include_ticker_cache=true` to also wipe the on-disk per-ticker cache |
+
+---
+
+## Rankings UI
+
+The Rankings widget includes:
+
+- **Grouped header band** above the column row — columns ALPHA · MOAT · Z · SLOAN · FCF are tagged **FUNDAMENTAL** (orange, matching the FUND verdict pill); SORT · β · STRAT · SS · R:R · ENTRY · TP · SL are tagged **TECHNICAL** (cyan, matching the TECH verdict pill).
+- **⚙ Weights button** in the toolbar — opens a modal to adjust the five AlphaScore indicator weights (Moat / Sloan / FCF / Altman / Sortino) and the four Rank Score component weights (AlphaScore / Signal Strength / Sector Score / R:R). Weights apply **live** via client-side recomputation — no rescan needed. Verdict pills update when adjusted alpha crosses the gate threshold. Weights persist across reloads via localStorage. See [`app/frontend/lib/alphaScore.ts`](app/frontend/lib/alphaScore.ts) for the TypeScript port of the tiered scoring logic.
+
+---
+
+## Caching Layers
+
+| Layer | Location | TTL | Purpose |
+|-------|----------|-----|---------|
+| API response cache | In-memory (`cache.py`) | 5 min – 1 hr per endpoint | Stage 0/1/2 responses, final rankings, market-overview, news, etc. |
+| Per-ticker yfinance cache | `.cache/ticker/<ticker>/` | 4 h prices, 24 h fundamentals | Eliminates redundant Yahoo round-trips on re-scans |
+| Backtesting price cache | `.cache/prices/<md5>.parquet` | 24 h | Used by `load_prices()` in the backtesting engine |
+| HMM cache | `.cache/hmm/<md5>.parquet` | — | HMM regime detection results |
+| Frontend score weights | `localStorage` | Until cleared | User-customised AlphaScore / Rank Score weights |
+
+**First scan** of a universe: cold cache, ~30-60 s on SET100 depending on Yahoo throttling.
+**Re-scan within 4 h:** prices and fundamentals served from disk → CPU-bound, ~5-10× faster.
+**Re-scan after 4 h, within 24 h:** prices re-fetched (small), fundamentals from disk.
+
+Clear caches manually: `rm -rf .cache/ticker/` or `curl -X DELETE "http://localhost:8000/api/cache?include_ticker_cache=true"`.
 
 ---
 

@@ -13,12 +13,15 @@ This document covers every user-facing feature and core functional module, inclu
    - [Stage 3 — Fundamental Scoring](#stage-3--fundamental-scoring)
    - [Stage 4 — Technical Strategy Selection](#stage-4--technical-strategy-selection)
    - [Composite Ranking Score](#composite-ranking-score)
+   - [Configurable Score Weights](#configurable-score-weights)
+   - [Rankings UI — Grouped Header](#rankings-ui--grouped-header)
 2. [Normal Walk-Forward Backtesting](#2-normal-walk-forward-backtesting)
 3. [Monte Carlo Integrated Backtesting](#3-monte-carlo-integrated-backtesting)
 4. [Portfolio Optimizers](#4-portfolio-optimizers)
 5. [Trading Strategies](#5-trading-strategies)
 6. [HMM Regime Detection](#6-hmm-regime-detection)
 7. [Performance Metrics](#7-performance-metrics)
+8. [Scan Performance & Caching](#8-scan-performance--caching)
 
 ---
 
@@ -189,19 +192,23 @@ $$Z = 1.2 X_1 + 1.4 X_2 + 3.3 X_3 + 0.6 X_4 + 1.0 X_5$$
 | $X_4$ | Market Cap / Total Liabilities |
 | $X_5$ | Revenue / Total Assets |
 
-**Alpha Score:**
+**Alpha Score (default weights):**
 
 $$\text{AlphaScore} = 0.30 \times E + 0.20 \times Q + 0.20 \times S + 0.20 \times R + 0.10 \times F$$
 
-| Dimension | Variable | Metric |
-|-----------|----------|--------|
-| Economic Value | $E$ | ROIC − WACC (moat score) |
-| Earnings Quality | $Q$ | Inverse Sloan Ratio |
-| Survival | $S$ | Altman Z (normalised) |
-| Risk-Adjusted Return | $R$ | Rolling Sortino |
-| FCF Quality | $F$ | FCF / Net Income |
+| Dimension | Variable | Metric | Default Weight |
+|-----------|----------|--------|:-------------:|
+| Economic Value | $E$ | ROIC − WACC (moat score) | 30 |
+| Earnings Quality | $Q$ | Inverse Sloan Ratio | 20 |
+| FCF Quality | $F$ | FCF / Net Income | 10 |
+| Survival | $S$ | Altman Z (normalised) | 20 |
+| Risk-Adjusted Return | $R$ | Rolling Sortino | 20 |
 
-High-beta stocks ($\beta > 1.5$) receive a regime penalty when composite risk $> 60$.
+Each dimension produces a tiered 0–1 sub-score (e.g. ROIC−WACC $> 10\%$ → 1.00; $> 5\%$ → 0.73; $> 0$ → 0.40; else 0). The composite score is the weight-sum normalised to a 0–100 scale.
+
+The five weights are **user-configurable from the frontend** — see [Configurable Score Weights](#configurable-score-weights).
+
+High-beta stocks ($\beta > 1.5$) receive a regime penalty when composite risk $> 60$. The penalty and the macro sector adjustment ($\pm 8$ pts) are applied **after** the weighted composite and are unaffected by user-entered weight magnitudes.
 
 ---
 
@@ -235,6 +242,15 @@ The strategy with the highest rolling Sharpe ratio over recent history is select
 
 $$\text{RankScore} = 0.45 \times \text{Alpha} + 0.30 \times \text{SignalStrength} + 0.15 \times \text{SectorScore} + 0.10 \times \text{RRScore}$$
 
+| Component | Default Weight |
+|-----------|:-------------:|
+| AlphaScore | 45 |
+| Signal Strength | 30 |
+| Sector Score | 15 |
+| R:R Score | 10 |
+
+The four weights are **user-configurable from the frontend** — see [Configurable Score Weights](#configurable-score-weights). `RRScore = min(RR / 3.0, 1.0) × 100`.
+
 **Verdict matrix:**
 
 | Fund Gate (Stage 3) | Tech Gate (Stage 4) | Verdict |
@@ -243,6 +259,48 @@ $$\text{RankScore} = 0.45 \times \text{Alpha} + 0.30 \times \text{SignalStrength
 | ✓ | ✗ | FUND_ONLY |
 | ✗ | ✓ | TECH_ONLY |
 | ✗ | ✗ | FAIL |
+
+Fund gate: `alpha ≥ 50 AND z > 1.81`. Tech gate: `rr_ratio ≥ 1.5 AND signal_strength ≥ 40`. When the user customises AlphaScore weights, gate3 (and therefore the verdict) is recomputed live on the client.
+
+---
+
+### Configurable Score Weights
+
+**File:** [`app/frontend/lib/alphaScore.ts`](app/frontend/lib/alphaScore.ts) · [`app/frontend/components/ranking/WeightsConfig.tsx`](app/frontend/components/ranking/WeightsConfig.tsx)
+
+The Rankings widget exposes a **⚙ WEIGHTS** button in its toolbar. Clicking it opens a modal with two sections:
+
+| Section | Configurable weights |
+|---------|---------------------|
+| **AlphaScore — 5 indicators** | Moat, Sloan, FCF, Altman, Sortino |
+| **Rank Score — 4 components** | AlphaScore, Signal Strength, Sector Score, R:R |
+
+Each weight is a slider + numeric input (0–100). The section TOTAL is displayed live; the composite formula auto-normalises the weight sum to 100 so the final score always stays on a 0–100 scale regardless of user-entered values.
+
+**Behavior:**
+
+- Changes apply **live on the client** — no rescan needed. The TypeScript port of the Python tiered scoring logic recomputes Alpha, Rank Score, gate3, and verdict for every row in a `useMemo`, then re-sorts (BUYs first, then by rank_score desc).
+- Default weights produce numerically identical results to the server-side score (verified by construction — the TS tier breakpoints mirror the Python implementation).
+- The Reset button restores both sections to the documented defaults (30/20/10/20/20 and 45/30/15/10).
+- Weights persist across page reloads via `localStorage` (via Zustand `persist` middleware, partialised to `alphaWeights` + `rankWeights` only).
+- When weights are non-default, the toolbar button shows a "•" indicator and the footer notes "weights customised".
+
+**Beta penalty and macro adjustment** are preserved verbatim from the Python implementation and applied after the weighted composite — they are not user-configurable.
+
+---
+
+### Rankings UI — Grouped Header
+
+A second header row above the column row groups columns into named bands ("merged-cell" style):
+
+| Band | Columns | Color |
+|------|---------|-------|
+| (unlabelled spacer) | #, TICKER, SECTOR, SCORE | — |
+| **FUNDAMENTAL** | ALPHA, MOAT, Z, SLOAN, FCF | Orange (`--col-fund`, matches FUND verdict pill) |
+| **TECHNICAL** | SORT, β, STRAT, SS, R:R, ENTRY, TP, SL | Cyan (`--col-tech`, matches TECH verdict pill) |
+| (unlabelled spacer) | GATE, VERDICT | — |
+
+Group widths are computed by summing column-pixel slices, so the bands stay aligned with the column row even if column widths change. See `COL_GROUPS` in [`app/frontend/components/widgets/RankingsWidget.tsx`](app/frontend/components/widgets/RankingsWidget.tsx).
 
 ---
 
@@ -788,3 +846,74 @@ All NaN and Inf values are replaced with `None` before serialisation.
 `n_years` is computed from calendar days: $n_{\text{years}} = \max\!\left(\frac{(T_{\text{end}} - T_{\text{start}})_{\text{days}}}{365.25},\; \frac{1}{365.25}\right)$
 
 Daily risk-free rate: $r_f^{\text{daily}} = \frac{r_f}{252}$
+
+---
+
+## 8. Scan Performance & Caching
+
+The pipeline scan (`POST /api/scan/start`) is overwhelmingly network-bound on yfinance. Three optimisations keep wall-clock time down.
+
+### Per-ticker work in `analyze_ticker`
+
+For each ticker in the universe, Stage 3 + Stage 4 access five yfinance properties — `history`, `financials`, `balance_sheet`, `cashflow`, `info`. Each is a separate HTTP call; `info` is the slowest single endpoint.
+
+### Optimisation 1 — Fetch SPY once per scan
+
+**Files:** [`app/backend/main.py`](app/backend/main.py) (`_run_scan`), [`src/data/providers.py`](src/data/providers.py)
+
+`_enrich_info` computes a `beta_vs_spy` field by correlating ticker returns against SPY. Previously this fetched the SPY 1Y history **once per ticker** (100× redundant work for SET100). The scan orchestrator now fetches SPY once before the per-ticker semaphore loop and threads the Close series through `analyze_ticker(spy_history=...)` → `_enrich_info(spy_history=...)`.
+
+### Optimisation 2 — Reuse history across Stage 3 and Stage 4
+
+**Files:** [`app/backend/pipeline.py`](app/backend/pipeline.py), [`src/agents/technical.py`](src/agents/technical.py)
+
+`run_technical_analysis` previously re-downloaded the same 1Y daily OHLCV that `analyze_ticker` had already fetched. It now accepts an optional `df=` parameter and the pipeline passes the existing DataFrame through.
+
+### Optimisation 3 — Disk-backed per-ticker cache
+
+**File:** [`src/data/yfinance_cache.py`](src/data/yfinance_cache.py)
+
+All five yfinance accesses in `analyze_ticker` are wrapped by a TTL-enforced disk cache.
+
+| Property | Cache file | TTL |
+|----------|-----------|:---:|
+| `history(period="1y")` | `.cache/ticker/<ticker>/history_1y.parquet` | 4 h |
+| `financials` | `.cache/ticker/<ticker>/financials.parquet` | 24 h |
+| `balance_sheet` | `.cache/ticker/<ticker>/balance_sheet.parquet` | 24 h |
+| `cashflow` | `.cache/ticker/<ticker>/cashflow.parquet` | 24 h |
+| `info` | `.cache/ticker/<ticker>/info.json` | 24 h |
+
+Design properties:
+
+- **Atomic writes** (temp file + `os.replace`) — a crashed/killed scan never produces a half-written cache file that would poison the next read.
+- **Read failures fall through** to a fresh fetch. Corrupt parquet, schema changes, or missing files never cause a correctness regression — only a cache miss.
+- **JSON sanitiser** converts numpy/pandas scalars and `NaN`/`Inf` values into JSON-safe primitives before writing `info.json`.
+- **Filesystem-safe ticker names** — characters outside `[A-Za-z0-9._-]` are replaced (e.g. `^GSPC` → `_GSPC`).
+- **Configurable TTL** per call (`get_history(ticker, period, ttl_seconds=...)`).
+
+The cache lives parallel to the existing `.cache/prices/` (backtesting loader) and `.cache/hmm/` directories.
+
+### Expected scan duration (SET100, 8-way semaphore)
+
+| Cache state | History | Fundamentals | Approx wall-clock |
+|-------------|---------|--------------|-------------------|
+| Cold (first scan ever) | network | network | 30–90 s |
+| Warm within 4 h | disk | disk | 5–15 s (CPU-bound) |
+| Warm 4 h–24 h | network | disk | 15–30 s |
+| Beyond 24 h | network | network | back to cold |
+
+### Cache management
+
+```bash
+# In-memory caches only (existing behavior)
+curl -X DELETE http://localhost:8000/api/cache
+
+# Also wipe the disk-backed ticker cache
+curl -X DELETE "http://localhost:8000/api/cache?include_ticker_cache=true"
+
+# Manual: nuke a single ticker
+rm -rf .cache/ticker/AAPL/
+
+# Manual: clear all ticker fundamentals + prices
+rm -rf .cache/ticker/
+```
